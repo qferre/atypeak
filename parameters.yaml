@@ -1,0 +1,100 @@
+# ---------------------------- Data processing ------------------------------- #
+
+# Core
+random_seed: 42
+
+# Genomic data processing
+# Results are by cell line and will go in the appropriate directory
+cell_line: "hela"
+pad_to: 3200 # Must be equal to the "pad_to" parameter in the Makefile !
+crumb: 0.1
+squish_factor: 10
+
+# ---------------------------- Execution ------------------------------------- #
+
+## Artificial data parameters
+# If true, you will use only artificial data. Useful for calibration.
+use_artificial_data: True
+#artificial_data_parameters:
+artificial_nb_datasets: 8 # Old was 6
+artificial_nb_tfs: 8 # Old was 4
+artificial_ones_only: True
+artificial_watermark_prob: 0.75
+
+# If you have already trained a model, set this to True
+load_saved_model: False
+
+nn_fit_verbosity: 1
+
+
+
+
+
+# If False, will not process the full real data, which can be long
+# You should calibrate with Q-score before processing the full data (see readme) !
+process_full_real_data: False
+
+
+
+
+# ---------------------------- Autoencoder model ----------------------------- #
+
+## Training
+nn_batch_size: 32
+nn_optimizer: "adam"
+nn_optimizer_learning_rate: 0.001
+#nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001
+
+#nn_optimizer_learning_rate: 0.00025
+
+######## MUST REPUT THE QUARTER LEARNING RATE ! NOW !
+
+# Long to train. Keep these both small. Usually long training not needed and will stop before.
+nn_batches_per_epoch : 20
+nn_number_of_epochs : 48 # NOTE Old was 24, but I have found better to use 2x more and let the EARLY STOPPING take care of it. And finally went back to 24 just in case No ? CAREFUL 24 WAS FOR DEFAULT LR
+
+
+#nn_early_stop_loss : None # If not none, will stop training once this threshold of loss is reached
+# TODO : USE IT IN THE CODE FOR NOW IT DOES NOTHING
+
+
+
+
+## Architecture
+#autoencoder_parameters:
+nn_kernel_width_in_basepairs: 20 # Should be kept small, use squishing instead
+nn_kernel_nb: 24 # Reput at 24 I think
+nn_reg_coef_filter: 0.0025
+nn_deep_dim: 64 # Reput at 64 !!
+nn_pooling_factor: 2
+
+
+# MOVE BELOW INTO README OR PAPER OR BOTH
+
+
+
+# ---------------------------- Diagnostic ------------------------------------ #
+
+# Distribution of scores depending on TF presence pairs to visualize
+# Only used in real data, not artificial
+
+
+# FOR JURKAT
+# tf_pairs:
+#   - ["erg","gabpa"]
+#   - ["ctcf","gabpa"]
+#   - ["ctcf","runx1"]
+
+# FOR HELA
+# tf_pairs:
+#   - ["ell2", "aff4"]
+#   - ["e2f1", "phf8"]
+#   - ["aff4", "znf143"]
+
+# FOR K562:
+tf_pairs:
+  - ["ctcf","rad21"]
+  - ["fos","jun"]
+  - ["irf1","atf1"]
+  - ["ctcf","jun"]
+  - ["gata1","gata2"]
