@@ -222,6 +222,18 @@ def plot_3d_matrix(mat, figsize=(10,6),
         - alpha (default 0.5) : Controls the transparency of plotted points
         - guideline (default True) : draws a line across nonzero elements in the X axis to help see perspective
         - standard_scale (default True) : will assume the values are between 0 and 1.
+
+
+    Example :
+
+    >>> m = np.zeros((3200,6,4))
+    >>> m[1000:2000,0,0] = m[1000:2000,1,0] = m[1000:2000,2,0] = 1
+    >>> m[1200:2100,2,1] = m[1200:2100,3,1] = 1
+    >>> m[1500:2300,2,2] = m[1500:2300,4,2] = 1
+    >>> m[0:800,1,3] = 1
+    >>> plot_3d_matrix(m, guideline = False, tf_colors_override = [(0,0,0.6),(0.5,0,0.5),(0,0.8,0),(1,0.6,0)])
+
+
     """
 
     ## Check : object must be a non-uniform 3d matrix
@@ -353,17 +365,13 @@ def plot_3d_matrix(mat, figsize=(10,6),
 
 
 
-"""
 
-import numpy as np
-m = np.zeros((100,10,3))
-m[0:100,2,2] = 1
-m[0:100,2,1] = 1
 
-plot_3d_matrix(m,
-    tf_colors_override = [(1,0,0),(0,1,0),(0,0,1)])
 
-"""
+
+
+
+
 
 
 ################################################################################
