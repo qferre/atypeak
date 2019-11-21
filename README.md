@@ -60,8 +60,16 @@ To sum up :
 
 ### Running
 
+
+Say that you should run some tries, find a model you like, and THEN :
+    - flip the load_saved_model switch to True (the model is automatically saved after training). not mandatory, if you don't you'll simply re-train the model with the current parameters.
+        TODO MAKE IT HAPPEN AND SAY SO IN README : I believe if load_saved_model is true, we should skip the diagnosis steps like the Q_score
+    - flip the process_full_date to True
+
 Set the model parameters in parametrs.yaml. Set load_saved_model and process_full_real_data to False, so you will train a model, evaluate it with Q-score, and save it.
-Once satisfied, set those two parameters to True so that you reload the model and process the full data
+Once satisfied, set those two parameters to True so that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis.
+
+
 
 
 

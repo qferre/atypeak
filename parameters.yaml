@@ -24,6 +24,10 @@ artificial_watermark_prob: 0.75
 # If you have already trained a model, set this to True
 load_saved_model: False
 
+
+# If reloading a known model, you may want to set this to false and skip the diangnosis steps (q-score, etc.)
+perform_diagnosis: True
+
 nn_fit_verbosity: 1
 
 
@@ -33,6 +37,9 @@ nn_fit_verbosity: 1
 # If False, will not process the full real data, which can be long
 # You should calibrate with Q-score before processing the full data (see readme) !
 process_full_real_data: False
+
+
+
 
 
 
