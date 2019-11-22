@@ -231,6 +231,54 @@ def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = Non
         tf_first_half = range(int(nb_tfs/2))
         tf_second_half = range(int(nb_tfs/2),nb_tfs)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         """
         ANOTHER THING TO TEST A THEORY : OVERLAPPING groups
         Pick not from first half OR second half. Instead pick from first+second OR First only.
@@ -238,7 +286,7 @@ def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = Non
         AGAIN TODO MAKE THIS A PARAMETER.
         LEAVE IT OFF BY DEFAULT
         """
-        overlapping_groups = True # SHOULD BE FALSE BY DEFAULT
+        overlapping_groups = False # SHOULD BE FALSE BY DEFAULT
         if overlapping_groups:
             tf_first_half = range(int(nb_tfs/2))
             tf_second_half = range(nb_tfs)
@@ -277,6 +325,21 @@ def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = Non
 
         if cointoss : tfs_to_choose_from = tf_first_half
         else : tfs_to_choose_from = tf_second_half
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
