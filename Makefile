@@ -74,7 +74,7 @@ decompress:
 
 	## Decompress data, keep originals
 	cd input_raw
-	gunzip *.gz -k
+	unxz *.xz -k
 
 	# Fix residual bug : by mistake some fields are separated with spaces instead
 	# of tabs in the peaks_file.
