@@ -87,7 +87,10 @@ if parameters['use_artificial_data'] :
     train_generator = ad.generator_fake(region_length = parameters['pad_to'],
                                         nb_datasets = parameters['artificial_nb_datasets'], nb_tfs=parameters['artificial_nb_tfs'],
                                         squish_factor = parameters['squish_factor'], ones_only=parameters['artificial_ones_only'],
-                                        watermark_prob = parameters['artificial_watermark_prob'], crumb = None)
+                                        watermark_prob = parameters['artificial_watermark_prob'],
+                                        overlapping_groups = parameters['artificial_overlapping_groups'],
+                                        tfgroup_split = parameters['artificial_tfgroup_split'],
+                                         crumb = None)
     print('Using artificial data of dimensions : '+str(parameters['artificial_nb_datasets'])+' x '+str(parameters['artificial_nb_tfs']))
 else:
     # ---------------------------- Real data --------------------------------- #
@@ -138,7 +141,7 @@ p.strip_dirs().sort_stats('tottime').print_stats()
 # ones and create the model
 
 
-def prepare_model_with_parameters(params):
+def prepare_model_with_parameters(parameters):
     """
     A wrapper function that will prepare an atyPeak model given the current parameters.
     Non-pure, since it depends on the rest of the code.
@@ -254,7 +257,7 @@ print(parameters)
 
 
 
-def train_model(model,params):
+def train_model(model,parametrs):
     """
     A wrapper function that will train a given model given the current parameters.
     Non-pure, since it depends on the rest of the code.
@@ -303,61 +306,28 @@ def train_model(model,params):
 
     else :
         # Callback for early stopping
-        #es = keras.callbacks.EarlyStopping(monitor='loss', patience=5, verbose=0)
+        es = EarlyStoppingByLossVal(monitor='loss', value=parameters['nn_early_stop_loss_absolute'], patience=2)    # Don't stop as soon as exact floor is reached (patience)
 
 
-
-        # TODO MAKE THIS A PARAMATERS
-        # TODO : Diasble this by default,or make it at 0. Make it a parameter
-        #es = EarlyStoppingByLossVal(monitor='loss', value=0.003, patience=2)
-        # TODO : does patience work with this custom thing ?
-        es = EarlyStoppingByLossVal(monitor='loss', value=0, patience=2)    # Don't stop as soon as exact floor is reached (patience)
-
-
-        # ALSO  stop in any case after 5 epochs with no improvement
+        # Stop in any case after several epochs with no improvement
         # Changed the patience to 8 since I diminished the learning rate and added a delta
-        es2 = keras.callbacks.EarlyStopping(monitor='loss', patience = 8, min_delta = 0.00025,
+        es2 = keras.callbacks.EarlyStopping(monitor='loss',
+            patience = parameters['nn_early_stop_patience'], min_delta = parameters['nn_early_stop_min_delta'],
             restore_best_weights = True)
-            # Try to combat loss spikes : they are often a symptom of hypertraining
-            # so when the loss starts going up or starts stagnating, indicating it's
-            # likely starting to learn "always the same thing", stop and restore the best weights
-        # TODO MAKE THIS MIN DELTA A PARAMATER AND
-
-
-
+            # Try to combat loss spikes and restore the best weights
 
         """
         # DEBUG : save at every epoch
-
         class CustomSaver(keras.callbacks.Callback):
             def on_epoch_end(self, epoch, logs={}):
                 self.model.save("DEBUG_model_at_epoch_{}.hd5".format(epoch))
-
         saver = CustomSaver()
         """
+
         print('Beginning training.')
         print('This can be long, depending on your hardware, from several minutes to around an hour.')
 
         start = time.time()
-
-
-
-
-
-
-        #parameters["nn_number_of_epochs"] = 16
-        #parameters["nn_number_of_epochs"] = 24
-
-        # TODO REUSE THIS PROPER TRAINER !!!
-        """
-        model.fit_generator(train_generator, verbose=1,
-            steps_per_epoch = parameters["nn_batches_per_epoch"],
-            epochs = parameters["nn_number_of_epochs"],
-            callbacks = [es, es2, saver],
-            max_queue_size = 1) # Model is quite complex with large data, so max queue size of 1 to prevent memory leak
-            # TODO  : no model is not 'quite complex with large data' just say the queue size helps
-        """
-
 
 
 
@@ -381,15 +351,10 @@ def train_model(model,params):
         print('Model saved.')
 
 
-
-
-
-        # TODO : Save the loss as text !!
+        # Save the loss as text
         loss_history = model.history.history["loss"]
         np.savetxt(root_path+"/data/output/model/"+"trained_model_"+parameters['cell_line']+"_loss_history.txt",
             np.array(loss_history), delimiter=",")
-
-
 
     return model
 
@@ -463,6 +428,11 @@ if parameters['perform_model_diagnosis']:
     # CAN BE RUN WITH BOTH TRUE AND ARTIFICIAL OF COURSe, but mostly meant for artifical
     # NOTE meant be be run in loop in a Jupyter kernel !!!!!!! Say so !!!!!!!
 
+    """
+    Explain that most of this part is meant to be run in a Jupyter Kernel
+    And that the plots will likely not display in a standard python console
+    """
+
     # TODO : maybe make this draw 20 examples and produce an evaluation pdf with those figures
 
 
@@ -471,46 +441,57 @@ if parameters['perform_model_diagnosis']:
 
     NB_EXAMPLES_TO_DISPLAY = 1
 
-    #eval_figsize = (8,4)
-    eval_figsize = (10,6)
+    eval_figsize_small = (5,5)
+    eval_figsize_large = (8,5)
 
     for i in range(NB_EXAMPLES_TO_DISPLAY):
 
         # Data
         before_batch = next(train_generator)[0]
         # TODO Maybe use another ID than 4 ? If was 4 for no good reason
-        ID = 2 ; before_raw = before_batch[ID,:,:,:,0]
-        before = np.around(before_raw-0.11) # Remove crumbing if applicable
-        prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+
+        len(before_batch)
+        for ID in range(len(before_batch)):
+
+
+            before_raw = before_batch[ID,:,:,:,0]
+
+
+            #before_raw[:,:,0:4]=0
+
+
+            before = np.around(before_raw-0.11) # Remove crumbing if applicable
+            prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
 
 
 
-        # 2D - mean along region axis
-        before_2d = np.max(before, axis=0)
-        plt.figure(figsize=(5,6)); sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
+            # 2D - mean along region axis
+            before_2d = np.max(before, axis=0)
+            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
 
-        prediction_2d = np.max(prediction, axis=0)
-        plt.figure(figsize=(5,6)); sns.heatmap(np.transpose(prediction_2d), cmap = 'Greens')
-
-
-
-
-        plt.figure(figsize=(5,6)); sns.heatmap(np.transpose(prediction_2d), cmap = 'Greens')
-
-        utils.plot_3d_matrix(before, figsize=eval_figsize)
-        clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
-        utils.plot_3d_matrix(clipped_pred, figsize=eval_figsize)
-
-        # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-        # clipped_pred = np.around(np.clip(prediction-0.1,0,999), decimals=1)
-        # utils.plot_3d_matrix(clipped_pred, figsize=eval_figsize)
-
-        anomaly_matrix = er.anomaly(before, prediction)
-        utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize) # Normal in blue, anomalous in red
+            prediction_2d = np.max(prediction, axis=0)
+            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), cmap = 'Greens')
 
 
 
 
+
+            utils.plot_3d_matrix(before, figsize=eval_figsize_large)
+            clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
+            utils.plot_3d_matrix(clipped_pred, figsize=eval_figsize_large)
+
+            # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+            # clipped_pred = np.around(np.clip(prediction-0.1,0,999), decimals=1)
+            # utils.plot_3d_matrix(clipped_pred, figsize=eval_figsize_large)
+
+            anomaly_matrix = er.anomaly(before, prediction)
+            utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
+
+
+
+            """
+            TODO should save some of those
+            """
 
 
 
@@ -520,13 +501,13 @@ if parameters['perform_model_diagnosis']:
     # Use this now that is is 2/3 1/3 for each TF group to test a frequency theory.
     # TODO MAKE SURE THAT IS THE CASE !
 
-
+    print("Abundance evaluation. Can be long...")
 
     summed_anomalies = []
     summed_befores = []
 
     # TODO : MAKE THAT A PARAMETER !
-    for i in range(1000):
+    for i in range(50):
 
         before_batch = next(train_generator)[0]
 
@@ -552,26 +533,16 @@ if parameters['perform_model_diagnosis']:
     # Do not consider the zeros where a peak was not placed, only the peaks and the rebuilt peaks
     #sb = np.ma.masked_equal(summed_befores, 0).mean(axis=0)
     sb = np.array(summed_befores).mean(axis=0)
-    sns.heatmap(sb, annot = True)
-
-    sa = np.array(summed_anomalies).mean(axis=0)
-    sns.heatmap(sa, annot = True)
-
-
+    mean_before_plot = sns.heatmap(sb, annot = True)
 
     mean_anomaly_values = np.ma.masked_equal(summed_anomalies, 0).mean(axis=0)
-    sns.heatmap(mean_anomaly_values, annot = True)
+    mean_anomaly_values_plot = sns.heatmap(mean_anomaly_values, annot = True)
 
+    """
+    # TODO SAVE THOSE PLOTS !!!!
+    THIS IS CAPITAL !!!
+    """
 
-
-
-
-    mean_anomaly_values = np.ma.masked_equal(summed_anomalies, 0).mean(axis=0)
-    sns.heatmap(mean_anomaly_values, annot = True)
-    # TODO SAVE THOSE PLOTS ?
-
-
-    parameters
 
 
 
@@ -652,7 +623,7 @@ if parameters['perform_model_diagnosis']:
 
     """
 
-
+    print("Beginning Q-score evaluation. Can be long...")
 
 
 
@@ -664,7 +635,7 @@ if parameters['perform_model_diagnosis']:
         nb_of_batches_to_generate = 200)
     # Final q-score :
     q_score = np.sum(np.sum(q))
-    print(q_score)
+    print("-- Total Q-score of the model (lower is better) : "+ str(q_score))
 
     # TODO SAVE THE ABOVE PLOTS, AND MAYBE EVEN SAVE THE ENTIRE Q MATRIX IN A TXT !!!!! This way Q-score value can be recalculated externally
 
@@ -679,7 +650,7 @@ if parameters['perform_model_diagnosis']:
 
     np.savetxt(plot_output_path+'q_score.tsv', q, delimiter='\t')
 
-
+    print("Q-score evaluation results saved.")
 
 
 
@@ -693,7 +664,7 @@ if parameters['perform_model_diagnosis']:
     """
 
 
-    ######### Grid search part
+    ######### WIP Grid search part
     # Put it in a commented block only
 
     # Read the yaml parameters to get a default parameters
@@ -734,7 +705,6 @@ if parameters['perform_model_diagnosis']:
 
     # Again, meant to be run in a Jupyter Kernel, not really as a script !
 
-    model.layers
 
 
     # Datasets

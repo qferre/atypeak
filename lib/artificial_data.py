@@ -33,7 +33,7 @@ The goal is to show that the model will usually rebuilt the correlation group as
 
 def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.arange(16)
                     nb_datasets = 16, nb_tfs = 10, squish_factor = 10, ones_only = False,
-                    watermark_prob = 1, crumb = None):
+                    watermark_prob = 0.75, tfgroup_split = 2/3, overlapping_groups = False, crumb = None):
     """
     Generator object that calls the make_a_fake_matrix() function.
 
@@ -50,7 +50,7 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
         batch_status = list()
         for i in range(batch_size):
             #X = make_a_fake_matrix(region_length,nb_datasets,nb_tfs,reliable_datasets)
-            X = make_a_fake_matrix(region_length,nb_datasets,nb_tfs, ones_only=ones_only, watermark_prob=watermark_prob)
+            X = make_a_fake_matrix(region_length, nb_datasets, nb_tfs, ones_only=ones_only, watermark_prob=watermark_prob, tfgroup_split=tfgroup_split, overlapping_groups=overlapping_groups)
 
             if crumb != None :
                 # To counter sparsity, add crumbs (see function documentation)
@@ -183,7 +183,7 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
 
 def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = None,
                         signal = True, noise=True,
-                        ones_only = False, watermark_prob = 1,
+                        ones_only = False, watermark_prob = 1, tfgroup_split = 2/3, overlapping_groups = False
                         return_separately = False):
     """
 
@@ -286,10 +286,10 @@ def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = Non
         AGAIN TODO MAKE THIS A PARAMETER.
         LEAVE IT OFF BY DEFAULT
         """
-        overlapping_groups = False # SHOULD BE FALSE BY DEFAULT
+        #overlapping_groups = False # SHOULD BE FALSE BY DEFAULT, AND NOW IT IS OKAY
         if overlapping_groups:
-            tf_first_half = range(int(nb_tfs/2))
-            tf_second_half = range(nb_tfs)
+            tf_first_half = range(nb_tfs)
+            tf_second_half = range(int(nb_tfs/2))
         else:
             tf_first_half = range(int(nb_tfs/2))
             tf_second_half = range(int(nb_tfs/2),nb_tfs)
@@ -304,8 +304,8 @@ def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = Non
         # Now, when we pick the correlating tfs, pick them from either the first half of the second half (50% chance)
         # Now 2/3 - 1/3 chance to test a theory
         """
-        tfgroup_split = 2/3
-
+        #tfgroup_split = 2/3
+        # OKAY I PUT IT AT 2/3 BY DEFAULT
         #tfgroup_split = 1/2
         """
         # TODO JUST MAKE THIS A PARAMETER !!!!!!!!!
