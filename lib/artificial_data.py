@@ -183,7 +183,7 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
 
 def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = None,
                         signal = True, noise=True,
-                        ones_only = False, watermark_prob = 1, tfgroup_split = 2/3, overlapping_groups = False
+                        ones_only = False, watermark_prob = 1, tfgroup_split = 2/3, overlapping_groups = False,
                         return_separately = False):
     """
 

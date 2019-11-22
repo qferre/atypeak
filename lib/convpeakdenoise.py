@@ -881,3 +881,21 @@ def compute_max_activating_example_across_layer(model,
 
     # Return the processed list of optimal class examples
     return max_activation_class
+
+
+
+
+
+
+# To understand, provide a function that, given a before matrix (or simply a CRM) will output its encoded representation. So you can understand the combinations at play.
+def get_encoded_representation(before_matrix, model, ENCODED_LAYER_NUMBER = 15, disable_learning = True):
+
+    # Disable the learning phase behavior (e.g. Dropout)
+    if disable_learning: learnflag = 0
+    else: learnflag = 1
+
+    get_kth_layer_output = K.function([model.layers[0].input, K.learning_phase()],
+                                      [model.layers[ENCODED_LAYER_NUMBER].output])
+    result = get_kth_layer_output([before_matrix, learnflag])[0]
+
+    return result

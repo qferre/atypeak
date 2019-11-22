@@ -73,13 +73,17 @@ print('Parameters loaded.')
 """
 
 
+# Plot output path
+plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/'
+if parameters['use_artificial_data'] : plot_output_path += 'artificial/'
+if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
+
 
 
 
 ############################### DATA GENERATOR #################################
 # You may use either the artificial data generator or the true data.
 # Artificial data is mainly used for calibrations and demonstrations.
-
 
 
 if parameters['use_artificial_data'] :
@@ -212,7 +216,6 @@ model = prepare_model_with_parameters(parameters)
 
 
 
-
 class EarlyStoppingByLossVal(keras.callbacks.Callback):
     def __init__(self, monitor='loss', value=0.00001, verbose=0, patience = 0):
         super(keras.callbacks.Callback, self).__init__()
@@ -220,18 +223,12 @@ class EarlyStoppingByLossVal(keras.callbacks.Callback):
         self.value = value
         self.verbose = verbose
         self.patience = patience
-
         self.wait = 0
 
     def on_epoch_end(self, epoch, logs={}):
         current = logs.get(self.monitor)
         if current is None: warnings.warn("Early stopping requires %s available!" % self.monitor, RuntimeWarning)
-
-        if current < self.value:
-            self.wait += 1
-            print("Waiting...")
-
-
+        if current < self.value: self.wait += 1
         if self.wait >= self.patience:
             if self.verbose > 0: print("Epoch %05d: early stopping after patience for THR" % epoch)
             self.model.stop_training = True
@@ -245,7 +242,8 @@ class EarlyStoppingByLossVal(keras.callbacks.Callback):
 
 
 
-
+# Control print of parameters
+print("-- PARAMETERS :")
 print(parameters)
 
 
@@ -253,8 +251,6 @@ print(parameters)
 
 # ------------------------------ Training ------------------------------------ #
 # Train only if not loading a saved model
-
-
 
 
 def train_model(model,parametrs):
@@ -267,7 +263,7 @@ def train_model(model,parametrs):
 
     # Custom session to be parcimonious with RAM usage
     if K.backend() == 'tensorflow' :
-        #config = tf.ConfigProto(log_device_placement=True).
+        #config = tf.ConfigProto(log_device_placement=True)
         config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
         sess = tf.Session(config=config)
@@ -290,19 +286,6 @@ def train_model(model,parametrs):
         # TODO : might need more than 1 epoch sometimes !?
 
         print('Loaded a saved model.')
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     else :
         # Callback for early stopping
@@ -328,9 +311,6 @@ def train_model(model,parametrs):
         print('This can be long, depending on your hardware, from several minutes to around an hour.')
 
         start = time.time()
-
-
-
         model.fit_generator(train_generator, verbose=1,
             steps_per_epoch = parameters["nn_batches_per_epoch"],
             epochs = parameters["nn_number_of_epochs"],
@@ -339,9 +319,6 @@ def train_model(model,parametrs):
             # TODO  : no model is not 'quite complex with large data' just say the queue size helps
         end = time.time()
         print('Training completed in '+str(end-start)+' s')
-
-
-
 
         # Save trained model
         if not parameters['use_artificial_data'] :
@@ -369,75 +346,25 @@ model = train_model(model, parameters)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 ################################################################################
 ################################# DIAGNOSTIC ###################################
 ################################################################################
-# Now that the data has been processed, produce some diagnostic plots
-# HMM NO PRODUCE THE FILE LATER ONLY WHEN NEEDED AS IT IS LONG
-
-
-# IMPORTANT REMARK :
-# The file has been produced here, so I can easily run this part only in a
-# Jupyter kernel ? Except for the artificial data proof part I mean.
-# HMM NO PRODUCE THE FILE LATER ONLY WHEN NEEDED AS IT IS LONG
 
 
 
-
-# TODO FUNCTIONALIZE MOST OF THIS !!??
-
-
-
-
-
-# Plot output path
-plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/'
-
-# If artificial :
-if parameters['use_artificial_data'] : plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/artificial/'
-
-
-if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
-
-
-
-
-
-
-# ONLY DO THIS IF THE perform_diagnosis FLAG IS TRUE !
+# Perform some diagnosis on the model, only if the config flag is true.
 # Notably, uselsss when reloading a model
+# CAN BE RUN WITH BOTH TRUE AND ARTIFICIAL OF COURSe, but mostly meant for artifical
 if parameters['perform_model_diagnosis']:
 
 
-
-
-    # ------------------------------- Evaluation --------------------------------- #
-    # CAN BE RUN WITH BOTH TRUE AND ARTIFICIAL OF COURSe, but mostly meant for artifical
-    # NOTE meant be be run in loop in a Jupyter kernel !!!!!!! Say so !!!!!!!
-
+    # ------------------------------ Evaluation ------------------------------ #
     """
     Explain that most of this part is meant to be run in a Jupyter Kernel
     And that the plots will likely not display in a standard python console
     """
 
     # TODO : maybe make this draw 20 examples and produce an evaluation pdf with those figures
-
-
-
-    # TODO : the eval parameter will plot directly some examples. Set it if Jupyter kernel ?
 
     NB_EXAMPLES_TO_DISPLAY = 1
 
@@ -448,21 +375,12 @@ if parameters['perform_model_diagnosis']:
 
         # Data
         before_batch = next(train_generator)[0]
-        # TODO Maybe use another ID than 4 ? If was 4 for no good reason
 
-        len(before_batch)
         for ID in range(len(before_batch)):
-
-
             before_raw = before_batch[ID,:,:,:,0]
-
-
             #before_raw[:,:,0:4]=0
-
-
             before = np.around(before_raw-0.11) # Remove crumbing if applicable
             prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-
 
 
             # 2D - mean along region axis
@@ -471,9 +389,6 @@ if parameters['perform_model_diagnosis']:
 
             prediction_2d = np.max(prediction, axis=0)
             plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), cmap = 'Greens')
-
-
-
 
 
             utils.plot_3d_matrix(before, figsize=eval_figsize_large)
@@ -488,7 +403,6 @@ if parameters['perform_model_diagnosis']:
             utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
 
 
-
             """
             TODO should save some of those
             """
@@ -496,10 +410,6 @@ if parameters['perform_model_diagnosis']:
 
 
     # ----------------------- Abundance evaluation ------------------------
-    # Both artificial and true ?
-
-    # Use this now that is is 2/3 1/3 for each TF group to test a frequency theory.
-    # TODO MAKE SURE THAT IS THE CASE !
 
     print("Abundance evaluation. Can be long...")
 
@@ -528,8 +438,6 @@ if parameters['perform_model_diagnosis']:
             summed_anomalies += [summed_anomaly]
 
 
-
-
     # Do not consider the zeros where a peak was not placed, only the peaks and the rebuilt peaks
     #sb = np.ma.masked_equal(summed_befores, 0).mean(axis=0)
     sb = np.array(summed_befores).mean(axis=0)
@@ -542,23 +450,6 @@ if parameters['perform_model_diagnosis']:
     # TODO SAVE THOSE PLOTS !!!!
     THIS IS CAPITAL !!!
     """
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -625,17 +516,13 @@ if parameters['perform_model_diagnosis']:
 
     print("Beginning Q-score evaluation. Can be long...")
 
-
-
     # TODO make nb_of_batches_to_generate a parameter in yaml for evaluation !!
     # TODO THIS IS CRITICAL BEAUSE IT CAN TAKE VERY LONG FOR THE HIGH DIMENSION REAL DATA !!!
 
-
     q, qscore_plot, corr_plot, posvar_x_res_plot = er.calculate_q_score(model, train_generator,
         nb_of_batches_to_generate = 200)
-    # Final q-score :
-    q_score = np.sum(np.sum(q))
-    print("-- Total Q-score of the model (lower is better) : "+ str(q_score))
+    # Final q-score (total sum)
+    print("-- Total Q-score of the model (lower is better) : "+ str(np.sum(np.sum(q))))
 
     # TODO SAVE THE ABOVE PLOTS, AND MAYBE EVEN SAVE THE ENTIRE Q MATRIX IN A TXT !!!!! This way Q-score value can be recalculated externally
 
@@ -656,14 +543,11 @@ if parameters['perform_model_diagnosis']:
 
 
 
-
     """
     LAUNCH THIS ON SACAPUS MASSIVELY, ALONG WITH THE CREATION OF THE OTHER CELL LINES, WITH A MAXIMUM OF CORES
     """
 
     """
-
-
     ######### WIP Grid search part
     # Put it in a commented block only
 
@@ -681,10 +565,10 @@ if parameters['perform_model_diagnosis']:
     for parameters_custom in parameters_to_try:
         model = prepare_model_with_parameters(parameters_custom)
         trained_model = train_model(model, parameters_custom)
-        q_score, _,_,_ = q_score(model, train_generator)
+        q, _,_,_ = q_score(model, train_generator)
 
         # Add resulting q-score to parameters
-        parameters_to_try.update({'Q_score':q_score})
+        parameters_to_try.update({'Q_score':np.sum(np.sum(q))})
 
         parameters_to_try = parameters
 
@@ -701,11 +585,7 @@ if parameters['perform_model_diagnosis']:
     # Visualize filters
     FILTERS_TO_PLOT_MAX = 20
 
-    # TODO THOSE ARE NOT THE CORRECT LAYER NUMBERS ANYMORE I MOVE THEM !
-
     # Again, meant to be run in a Jupyter Kernel, not really as a script !
-
-
 
     # Datasets
     w = model.layers[2].get_weights()[0]
@@ -722,17 +602,12 @@ if parameters['perform_model_diagnosis']:
 
     # ----------------------- Visualize encoded representation ------------------- #
 
-    """
-    Do on artificial data first, but should work on real data as well.
-    """
-
     # I added some Y and Z blur, just to smooth it a little. KEEP THE BLUR MINIMAL AS IT DOES NOKE MAKE SENSE
 
     ENCODED_LAYER_NUMBER = 15 # Starts at 0 I think
 
     # To check this is the correct number:
     print(model.layers[ENCODED_LAYER_NUMBER].name == 'encoded')
-
     # TODO replace with something like model.get_layer("encoded")
 
 
@@ -751,30 +626,16 @@ if parameters['perform_model_diagnosis']:
 
 
     # Move this somewhere else.
-    # To understand, provide a function that, given a before matrix (or simply a CRM) will output its encoded representation. So you can understand the combinations at play.
-    def get_encoded_representation(before_matrix, model, ENCODED_LAYER_NUMBER = 15, disable_learning = True):
-
-        # Disable the learning phase behavior (e.g. Dropout)
-        if disable_learning: learnflag = 0
-        else: learnflag = 1
-
-        get_kth_layer_output = K.function([model.layers[0].input, K.learning_phase()],
-                                          [model.layers[ENCODED_LAYER_NUMBER].output])
-        result = get_kth_layer_output([before_matrix, learnflag])[0]
-
-        return result
 
 
-
-    # Disable this. Example of code snippet
-    tmp = get_encoded_representation(before[np.newaxis,...,np.newaxis], model)
+    # Get an encoded representation for comparison (from the latest `before`, from above)
+    tmp = cp.get_encoded_representation(before[np.newaxis,...,np.newaxis], model)
     sns.heatmap(np.transpose(tmp[0])**2)
     utils.plot_3d_matrix(before[0,...,0])
 
 
-
     """
-    VISUALIZATION OF ENCODED SHAPES IS VERY PROMISING ! NEED TO RETRY THIS IN JURKAT WITH REAL DATA !!!!!!!!!
+    VISUALIZATION OF ENCODED SHAPES IS VERY PROMISING ! NEED TO RETRY THIS WITH REAL DATA !!!!!!!!!
     """
 
 
@@ -793,26 +654,7 @@ if parameters['perform_model_diagnosis']:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # ------------------------ Proof on artificial data -------------------------- #
+    # ----------------------- Proof on artificial data ----------------------- #
     # Plot score of artificial peaks depneding on type (noise, stack, ...)
 
     if parameters['use_artificial_data'] :
