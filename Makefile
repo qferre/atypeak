@@ -31,6 +31,10 @@ install:
 	# Create the conda environment we need
 	conda env create -f env.yaml
 
+	# Might want to activate it and then update it
+	# source activate atypeak
+	# conda update --all
+
 
 
 prepare: decompress copybin intersect convert dictionaries split

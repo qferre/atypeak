@@ -48,6 +48,7 @@ np.random.seed(parameters["random_seed"])
 if K.backend() == 'tensorflow' :
     import tensorflow as tf
     tf.set_random_seed(parameters["random_seed"])
+    #tf.get_logger().setLevel('INFO') # Disable INFO, keep only WARNING and ERROR messages
 
 
 ## Reading corresponding keys. See the documentation of prepare() for more.
@@ -137,7 +138,7 @@ p.strip_dirs().sort_stats('tottime').print_stats()
 # ones and create the model
 
 
-def prepare_model_with_params(params):
+def prepare_model_with_parameters(params):
     """
     A wrapper function that will prepare an atyPeak model given the current parameters.
     Non-pure, since it depends on the rest of the code.
@@ -198,7 +199,7 @@ def prepare_model_with_params(params):
     return model
 
 # Prepare the model
-model = prepare_model_with_params(parameters)
+model = prepare_model_with_parameters(parameters)
 
 
 
@@ -263,7 +264,8 @@ def train_model(model,params):
 
     # Custom session to be parcimonious with RAM usage
     if K.backend() == 'tensorflow' :
-        config = tf.ConfigProto(log_device_placement=True)
+        #config = tf.ConfigProto(log_device_placement=True).
+        config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
         sess = tf.Session(config=config)
         K.set_session(sess)
@@ -384,7 +386,7 @@ def train_model(model,params):
 
         # TODO : Save the loss as text !!
         loss_history = model.history.history["loss"]
-        np.savetxt(root_path+"/data/output/model/"+"trained_model"+parameters['cell_line']+"_loss_history.txt",
+        np.savetxt(root_path+"/data/output/model/"+"trained_model_"+parameters['cell_line']+"_loss_history.txt",
             np.array(loss_history), delimiter=",")
 
 
@@ -392,7 +394,7 @@ def train_model(model,params):
     return model
 
 # Train the model
-model = train_model(model,parameters)
+model = train_model(model, parameters)
 
 
 
@@ -452,7 +454,7 @@ if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
 
 # ONLY DO THIS IF THE perform_diagnosis FLAG IS TRUE !
 # Notably, uselsss when reloading a model
-if parameters['perform_diagnosis']:
+if parameters['perform_model_diagnosis']:
 
 
 
@@ -467,13 +469,12 @@ if parameters['perform_diagnosis']:
 
     # TODO : the eval parameter will plot directly some examples. Set it if Jupyter kernel ?
 
-
-
+    NB_EXAMPLES_TO_DISPLAY = 1
 
     #eval_figsize = (8,4)
     eval_figsize = (10,6)
 
-    for i in range(1):
+    for i in range(NB_EXAMPLES_TO_DISPLAY):
 
         # Data
         before_batch = next(train_generator)[0]
@@ -655,11 +656,6 @@ if parameters['perform_diagnosis']:
 
 
 
-    import importlib
-    importlib.reload(er)
-
-
-
     # TODO make nb_of_batches_to_generate a parameter in yaml for evaluation !!
     # TODO THIS IS CRITICAL BEAUSE IT CAN TAKE VERY LONG FOR THE HIGH DIMENSION REAL DATA !!!
 
@@ -712,7 +708,7 @@ if parameters['perform_diagnosis']:
 
     # now do the search
     for parameters_custom in parameters_to_try:
-        model = prepare_model_with_params(parameters_custom)
+        model = prepare_model_with_parameters(parameters_custom)
         trained_model = train_model(model, parameters_custom)
         q_score, _,_,_ = q_score(model, train_generator)
 
@@ -966,9 +962,9 @@ else:
         # A new result file labeled _normalized has been produced.
         print('Processing complete.')
 
-    #!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!
-    # TODO ALSO SAY SO  : THIS NORMALIZED FILE IS THE ONE YOU WANT !!!!!!!!!! WELL BOTH ACTUALLY
-    #!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!
+        #!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!
+        # TODO ALSO SAY SO  : THIS NORMALIZED FILE IS THE ONE YOU WANT !!!!!!!!!! WELL BOTH ACTUALLY
+        #!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!
 
 
 
@@ -976,153 +972,159 @@ else:
 
 
 
-    # ----------------------------- Diagnostic plots ----------------------------- #
-
-    """
-    TODO : does all the below require what is above ? maybe some stuff could be conditioned on perform_diagnosis ?
-    """
-
-    # Only if not artificial data
-    # TODO : those could be useful in artificial as well
-
-
-        # -------- Normalization of score by TF
-        # TO CHECK : these plots give info from before the normalization no ?
-
-        # By TF
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sub_df = scores_by_tf_df.loc[:,['count','50pc']]
-        sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
-        for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-        plt.savefig(plot_output_path+'scores_by_tf.pdf')
-
-        # By dataset
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sub_df = scores_by_dataset_df.loc[:,['count','50pc']]
-        sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
-        for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-        plt.savefig(plot_output_path+'scores_by_dataset.pdf')
-
-
-
-        # TODO MAYBE Remove the dataset plot since we don't normalize by dataset
-
-
-        # ------ Informative plots for result checking
-        # TODO STOCK AND EXPORT ALL THESE PLOTS
-
-        # Those are CONTROL Plots. Explain that.
-        # They are not done on our diagnostic, they just allow you to check the results
-
-        # -Including : Compare to the average CRM
-        # Produce a picture of the average CRM for later comparisons
-
-
-
-
-        # TODO : THOSE ARE MAYBE ALREADY CALCULATED BY THE Q-SCORE. MERGE THIS CODE WITH THE Q-SCORE CODE TO AVOID REDUNDANCIES ?
-
-        list_of_many_crms = er.get_some_crms(train_generator)
-
-
-        average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
-
-        summed = np.mean(before, axis=0)
-        fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
-
-        summed = np.mean(clipped_pred, axis=0)
-        average_rebuilt_crm_fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
-
-
-
-        # Careful : some horizontal "ghosting" might be due to summed crumbing
-
+        # ----------------------------- Diagnostic plots ----------------------------- #
 
         """
-        SAVE THE ABOVE FIGS SHOMEWHERE
+        TODO : does all the below require what is above ? maybe some stuff could be conditioned on perform_diagnosis ?
         """
+        if parameters['perform_real_data_diagnosis']:
 
 
-        #
-        # max = np.zeros((1,12))
-        # N = 1
-        # for i in range(N):
-        #     current_max = np.max(next(train_generator)[0][0,:,:,:,0], axis=1)
-        #     current_max.shape
-        #     max = np.concatenate([max,current_max])
-        #
-        # # Sum, Remove crumbs and reshape
-        # sm = (np.sum(max,axis=0) - 0.1*N).reshape((max.shape[1],1))
-        # fig, ax = plt.subplots(figsize=(10,1)) ; sns.heatmap(np.transpose(sm) / sum(sm), fmt='.0%', annot = True, cmap = 'Reds') # Numbers
-        #
-        # # Try a correlation matrix instead
-        # max_df = pd.DataFrame(max)
-        # fig, ax = plt.subplots(figsize=(10,10)) ; sns.heatmap(max_df.corr(), fmt = '.2f', annot=True, ax=ax)
+            """
+            TODO : should I condition all of this on parameters['perform_diagnosis'] ??
+            """
 
-        # WARNING : the matrix does the have the datasets in the same order as the variable 'datasets', we saw that when trying to look them up with Jeanne. Fix it.
+            # Only if not artificial data
+            # TODO : those could be useful in artificial as well
 
 
+            # -------- Normalization of score by TF
+            # TO CHECK : these plots give info from before the normalization no ?
 
+            # By TF
+            fig, ax = plt.subplots(figsize=(10, 8))
+            sub_df = scores_by_tf_df.loc[:,['count','50pc']]
+            sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
+            for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
+            plt.savefig(plot_output_path+'scores_by_tf.pdf')
 
-
-        # NOTE THIS IS DONE ALL THE TIME, NOT JUST IF EVAL IS TRUE
-
-
-        # # Plot output path
-        # plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/'
-        # if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
-
-
-        average_crm_fig.savefig(plot_output_path+'average_crm.pdf')
-        tf_corr_fig.savefig(plot_output_path+'tf_corr.pdf')
-        dataset_corr_fig.savefig(plot_output_path+'dataset_corr.pdf')
-        tf_abundance_fig.savefig(plot_output_path+'tf_abundance.pdf')
-        dataset_abundance_fig.savefig(plot_output_path+'dataset_abundance.pdf')
+            # By dataset
+            fig, ax = plt.subplots(figsize=(10, 8))
+            sub_df = scores_by_dataset_df.loc[:,['count','50pc']]
+            sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
+            for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
+            plt.savefig(plot_output_path+'scores_by_dataset.pdf')
 
 
 
-
-        # ----------------------- Scores per CRM  ------------------------- #
-
-        # VERY IMPORTANT PLOTS
-
-        print('Computing score distribution per number of peaks in CRMs...')
-
-        # TODO the CRM file path should be a parameter in the YAML, it is hardcoded for now
-        CRM_FILE = './data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed'
-        score_distrib, avg_score_crm, max_score_crm = er.plot_score_per_crm_density(output_bed_path, CRM_FILE)
-
-        score_distrib.save(plot_output_path+'score_distribution.pdf')
-        avg_score_crm.save(plot_output_path+'average_score_per_crm_density.pdf')
-        max_score_crm.save(plot_output_path+'max_score_per_crm_density.pdf')
+            # TODO MAYBE Remove the dataset plot since we don't normalize by dataset
 
 
+            # ------ Informative plots for result checking
+            # TODO STOCK AND EXPORT ALL THESE PLOTS
 
-        # REDO THIS ON NORMALIZED FILE
-        print("... in the normalized file ...")
-        output_tfnorm_file = output_bed_path+'_normalized_by_tf.bed'
-        score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_tfnorm_file, CRM_FILE)
-        score_distrib_tfnorm.save(plot_output_path+'score_distribution_TFNORM.pdf')
-        avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_TFNORM.pdf')
-        max_score_crm_tfnorm.save(plot_output_path+'max_score_per_crm_density_TFNORM.pdf')
+            # Those are CONTROL Plots. Explain that.
+            # They are not done on our diagnostic, they just allow you to check the results
+
+            # -Including : Compare to the average CRM
+            # Produce a picture of the average CRM for later comparisons
 
 
 
 
-        # ----------------- Scores when known cofactors (or known non-cofactors) are present
+            # TODO : THOSE ARE MAYBE ALREADY CALCULATED BY THE Q-SCORE. MERGE THIS CODE WITH THE Q-SCORE CODE TO AVOID REDUNDANCIES ?
 
-        # Work on NORMALIZED scores
-
-        atypeak_result_file_normalized = output_bed_path + "_normalized_by_tf.bed"
-        crm_file_path = "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
-        # TODO UNHARDCODE THE CRM FILE PATH OF AT LEAST PUT IT AT THE BEGINNING !!!!!
+            list_of_many_crms = er.get_some_crms(train_generator)
 
 
+            average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
 
-        tfs_to_plot = parameters['tf_pairs']
+            summed = np.mean(before, axis=0)
+            fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
 
-        for pair in tfs_to_plot:
-            # TODO CAREFUL ABOUT CASE !!
-            tf1, tf2 = pair
-            p, _ = er.get_scores_whether_copresent(tf1, tf2, atypeak_result_file_normalized, crm_file_path)
-            p.save(plot_output_path+"tfdiag_"+tf1+"_"+tf2+".pdf")
+            summed = np.mean(clipped_pred, axis=0)
+            average_rebuilt_crm_fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
+
+
+
+            # Careful : some horizontal "ghosting" might be due to summed crumbing
+
+
+            """
+            SAVE THE ABOVE FIGS SHOMEWHERE
+            """
+
+
+            #
+            # max = np.zeros((1,12))
+            # N = 1
+            # for i in range(N):
+            #     current_max = np.max(next(train_generator)[0][0,:,:,:,0], axis=1)
+            #     current_max.shape
+            #     max = np.concatenate([max,current_max])
+            #
+            # # Sum, Remove crumbs and reshape
+            # sm = (np.sum(max,axis=0) - 0.1*N).reshape((max.shape[1],1))
+            # fig, ax = plt.subplots(figsize=(10,1)) ; sns.heatmap(np.transpose(sm) / sum(sm), fmt='.0%', annot = True, cmap = 'Reds') # Numbers
+            #
+            # # Try a correlation matrix instead
+            # max_df = pd.DataFrame(max)
+            # fig, ax = plt.subplots(figsize=(10,10)) ; sns.heatmap(max_df.corr(), fmt = '.2f', annot=True, ax=ax)
+
+            # WARNING : the matrix does the have the datasets in the same order as the variable 'datasets', we saw that when trying to look them up with Jeanne. Fix it.
+
+
+
+
+
+            # NOTE THIS IS DONE ALL THE TIME, NOT JUST IF EVAL IS TRUE
+
+
+            # # Plot output path
+            # plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/'
+            # if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
+
+
+            average_crm_fig.savefig(plot_output_path+'average_crm.pdf')
+            tf_corr_fig.savefig(plot_output_path+'tf_corr.pdf')
+            dataset_corr_fig.savefig(plot_output_path+'dataset_corr.pdf')
+            tf_abundance_fig.savefig(plot_output_path+'tf_abundance.pdf')
+            dataset_abundance_fig.savefig(plot_output_path+'dataset_abundance.pdf')
+
+
+
+
+            # ----------------------- Scores per CRM  ------------------------- #
+
+            # VERY IMPORTANT PLOTS
+
+            print('Computing score distribution per number of peaks in CRMs...')
+
+            # TODO the CRM file path should be a parameter in the YAML, it is hardcoded for now
+            CRM_FILE = './data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed'
+            score_distrib, avg_score_crm, max_score_crm = er.plot_score_per_crm_density(output_bed_path, CRM_FILE)
+
+            score_distrib.save(plot_output_path+'score_distribution.pdf')
+            avg_score_crm.save(plot_output_path+'average_score_per_crm_density.pdf')
+            max_score_crm.save(plot_output_path+'max_score_per_crm_density.pdf')
+
+
+
+            # REDO THIS ON NORMALIZED FILE
+            print("... in the normalized file ...")
+            output_tfnorm_file = output_bed_path+'_normalized_by_tf.bed'
+            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_tfnorm_file, CRM_FILE)
+            score_distrib_tfnorm.save(plot_output_path+'score_distribution_TFNORM.pdf')
+            avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_TFNORM.pdf')
+            max_score_crm_tfnorm.save(plot_output_path+'max_score_per_crm_density_TFNORM.pdf')
+
+
+
+
+            # ----------------- Scores when known cofactors (or known non-cofactors) are present
+
+            # Work on NORMALIZED scores
+
+            atypeak_result_file_normalized = output_bed_path + "_normalized_by_tf.bed"
+            crm_file_path = "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
+            # TODO UNHARDCODE THE CRM FILE PATH OF AT LEAST PUT IT AT THE BEGINNING !!!!!
+
+
+
+            tfs_to_plot = parameters['tf_pairs']
+
+            for pair in tfs_to_plot:
+                # TODO CAREFUL ABOUT CASE !!
+                tf1, tf2 = pair
+                p, _ = er.get_scores_whether_copresent(tf1, tf2, atypeak_result_file_normalized, crm_file_path)
+                p.save(plot_output_path+"tfdiag_"+tf1+"_"+tf2+".pdf")

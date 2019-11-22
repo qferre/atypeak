@@ -1,53 +1,36 @@
 # ---------------------------- Data processing ------------------------------- #
 
-# Core
-random_seed: 42
+
 
 # Genomic data processing
 # Results are by cell line and will go in the appropriate directory
 cell_line: "hela"
-pad_to: 3200 # Must be equal to the "pad_to" parameter in the Makefile !
-crumb: 0.1
-squish_factor: 10
+
 
 # ---------------------------- Execution ------------------------------------- #
 
-## Artificial data parameters
-# If true, you will use only artificial data. Useful for calibration.
-use_artificial_data: False
-#artificial_data_parameters:
-artificial_nb_datasets: 8
-artificial_nb_tfs: 8
-artificial_ones_only: True
-artificial_watermark_prob: 0.75
+
+# If true, you will use only artificial data. Useful for demonstration.
+use_artificial_data: True
 
 
-
-
-
-
-
-
-
-
-
-
-# If you have already trained a model, set this to True
+# If you have already trained a model, set this to True (models are saved automatically when trained)
 load_saved_model: False
 
-
 # If reloading a known model, you may want to set this to false and skip the diangnosis steps (q-score, etc.)
-perform_diagnosis: True
-
-
-
-
-
+perform_model_diagnosis: True
 
 
 # If False, will not process the full real data, which can be long
 # You should calibrate with Q-score before processing the full data (see readme) !
 process_full_real_data: False
+# The below will perform diagnosis on real data : average score per crm, alone+both plots, that kind of stuff
+# You should likely leave it at True
+perform_real_data_diagnosis: True
+
+
+
+
 
 
 
@@ -57,13 +40,33 @@ process_full_real_data: False
 
 # ---------------------------- Autoencoder model ----------------------------- #
 
+# Below are the key parameters for info budget
+
+## Architecture
+nn_kernel_nb: 16 # Reput at 24 I think
+nn_deep_dim: 32 # Reput at 64 !!
 ## Training
-nn_batch_size: 32
-nn_optimizer: "adam"
-#nn_optimizer_learning_rate: 0.001
-nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001
+nn_optimizer_learning_rate: 0.001
+#nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001
 
 #nn_optimizer_learning_rate: 0.00025
+
+
+
+
+
+
+# You likely won't need to modify those below
+pad_to: 3200 # Must be equal to the "pad_to" parameter in the Makefile !
+crumb: 0.1
+squish_factor: 10
+
+
+
+## Other training paramters Training
+nn_batch_size: 32
+nn_optimizer: "adam"
+
 
 ######## MUST REPUT THE QUARTER LEARNING RATE ! NOW !
 
@@ -78,20 +81,34 @@ nn_fit_verbosity: 1
 
 
 
-## Architecture
+## Other architecture parameters Architecture
 #autoencoder_parameters:
 nn_kernel_width_in_basepairs: 20 # Should be kept small, use squishing instead
-nn_kernel_nb: 64 # Reput at 24 I think
+
 nn_reg_coef_filter: 0.0025
-nn_deep_dim: 512 # Reput at 64 !!
 nn_pooling_factor: 2
+
+
 
 
 # MOVE BELOW INTO README OR PAPER OR BOTH
 
 
 
+
+
+
 # ---------------------------- Diagnostic ------------------------------------ #
+
+
+#----------------- artificial_data_parameters:
+artificial_nb_datasets: 8
+artificial_nb_tfs: 8
+artificial_ones_only: True
+artificial_watermark_prob: 0.75
+
+# Core parameter : used all across the program, including in training !
+random_seed: 42
 
 # Distribution of scores depending on TF presence pairs to visualize
 # Only used in real data, not artificial
