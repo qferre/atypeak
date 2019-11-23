@@ -6,7 +6,7 @@ cell_line: "hela"
 # ---------------------------- Execution ------------------------------------- #
 
 # If true, you will use only artificial data. Useful for demonstration.
-use_artificial_data: False
+use_artificial_data: True
 
 # If you have already trained a model, set this to True (models are saved automatically when trained)
 load_saved_model: False
@@ -27,8 +27,8 @@ perform_real_data_diagnosis: True
 # Below are the key parameters for info budget
 
 ## Architecture
-nn_kernel_nb: 32
-nn_deep_dim: 256
+nn_kernel_nb: 16
+nn_deep_dim: 32
 ## Training
 nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001
 
@@ -40,17 +40,17 @@ crumb: 0.1
 squish_factor: 10
 
 ## Other training paramters Training
-nn_batch_size: 32
+nn_batch_size: 40
 nn_optimizer: "adam"
 
 # Long to train. Keep these both small. Usually long training not needed and will stop before.
-nn_batches_per_epoch : 20
-nn_number_of_epochs : 48 # NOTE Old was 24, but I have found better to use 2x more and let the EARLY STOPPING take care of it. And finally went back to 24 just in case No ? CAREFUL 24 WAS FOR DEFAULT LR
+nn_batches_per_epoch : 50
+nn_number_of_epochs : 64 # NOTE Old was 24, but I have found better to use more and let the EARLY STOPPING take care of it
 nn_fit_verbosity: 1
 
 # Early stopping parameters
 nn_early_stop_min_delta: 0.00025
-nn_early_stop_patience: 8
+nn_early_stop_patience: 6
 nn_early_stop_loss_absolute: 0 # Will stop training once this threshold of loss is reached
 # TODO : USE IT IN THE CODE FOR NOW IT DOES NOTHING
 
