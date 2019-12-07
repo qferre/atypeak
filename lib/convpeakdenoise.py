@@ -328,7 +328,7 @@ def create_weighted_mse(datasets_weights, tf_weights):
 
 
 
-
+# TODO REPLACE "CONVPEAKDENOISE" EVERYWHERE WITH "ATYPEAK" OR "MODEL"
 
 
 
@@ -352,7 +352,7 @@ def create_convpeakdenoise_model(nb_datasets, region_size, nb_tfs,
     """
 
 
-
+"""
 # nb_datasets = 10
 # region_size = 320
 # nb_tfs = 8
@@ -372,14 +372,14 @@ def create_convpeakdenoise_model(nb_datasets, region_size, nb_tfs,
     # if (int(dividend) != dividend):
     #     raise ValueError("When creating the model ((region_size-kernel_width_in_basepairs+1)/2-kernel_width_in_basepairs+1)/2 must be integer, it is currently "+ str(dividend))
     #
-    # """
+    #
     # NO ! To remove flank problem, a better idea is to pad by ONE nucleotide to ensure it is divisible by 2 each time if kernel_width_in_basepairs is even.
     # Or simply make kernel_width_in_basepairs equal to itself minus one if even ?
     # And simply make sure that region_size is divisible by 4 !
     #
     # Wait. Do I even need to take care about that ?
-    # """
-
+    #
+"""
 
 
 
@@ -594,7 +594,8 @@ def create_convpeakdenoise_model(nb_datasets, region_size, nb_tfs,
     # TODO STACK A COUPLE MORE LSTM LAYERS, and use many of them in each layer (hundreds)
     # Add this before the encoded layer, so this layer gets info that the LSTMs have learned.
 
-
+    # This would obviously require reshaping the output of the latest CNN because LSTMs only get 2d input (not counting the batch_size dimension)
+    # So you would have 1 value at each position for the last filter, with the timesetps being the position along the genome
 
     # Use  LSTM layer with return sequences, to get (timesteps, lstm_number) as output dim
     # Then a time distributed Dense(deep_dim) to get (timesteps, deep_dim) as output
@@ -649,16 +650,14 @@ def create_convpeakdenoise_model(nb_datasets, region_size, nb_tfs,
     # x = ZeroPadding3D(padding)(x)
     # x = UpSampling3D((filter_pooling))(x)
 
-    # Old version, wrong.
-    # x = ZeroPadding3D(reverse_padding)(x)
-    # decoded = Conv3D(1, (1,1,1), activation='sigmoid', padding='same')(x)
 
-    # Essentially, one filter per TF*dataset
+    # Essentially, one filter per {TF*dataset}
     x = Conv3D(nb_datasets*nb_tfs, kernel_size_inner, padding='same')(x)
-    #x = Lambda(lambda m: tf.squeeze(m,[2,3]))(x)
+
+    # Reshaping
     x = Lambda(lambda m: K.squeeze(K.squeeze(m,2),2),
         output_shape = lambda input_shape: (input_shape[0],input_shape[1],input_shape[-1])
-        )(x) # Reshape
+        )(x)
     x = Lambda(lambda m: K.reshape(m,(K.shape(m)[0],K.shape(m)[1],nb_datasets,nb_tfs)),
         output_shape = lambda input_shape: (input_shape[0],input_shape[1],nb_datasets,nb_tfs)
         )(x)
@@ -681,9 +680,6 @@ def create_convpeakdenoise_model(nb_datasets, region_size, nb_tfs,
 
     return autoencoder
 
-
-
-#autoencoder.summary()
 
 
 
