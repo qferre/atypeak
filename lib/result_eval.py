@@ -36,7 +36,7 @@ def anomaly(before, prediction):
 
 
 
-
+    Note : this is all designed to work with scores, but for now the peaks all have scores of 1 when present.
 
 
     """
@@ -50,13 +50,20 @@ def anomaly(before, prediction):
 
 
 
+
+
     # Anomaly score computation
     anomaly = 1 - ((before+1E-100) - prediction)/(before+1E-100)
     # WARNING this considers higher plotting as an anomaly ! We want mostly the cases where the prediction is lower ! WAIT Is that not fixed by using "1 - (before - prediction)" and no squares ?
-
+    # Yeah now it's okay, if prediction > before then anomaly > 1
     # Divide by before, otherwise when peaks with low scores are discarded before-prediction is small so 1 - before-prediction is high...
 
-    anomaly = np.clip(anomaly, 0.001,1) # Do not clip at 0 or it not be plotted
+
+
+
+    # IMPORTANT NEW : NO LONGER CLIP ANOMALY AT 1. ANOMALY CAN BE ABOVE 1 IF IT WAS REBUILT WITH A HIGHER VALUE
+    # THAT HAPPENS FOR SOME REASON IN CERTAIN CORRELATION GROUPS. That's why we normalize by TF later !
+    anomaly = np.clip(anomaly, 1/1000, np.inf) # Do not clip at 0 or it will not be plotted
 
     return anomaly * mask
 
@@ -1055,6 +1062,9 @@ def get_scores_whether_copresent(tf_A, tf_B, atypeak_result_file, crm_file_path)
     rdf = pd.DataFrame(result) ; rdf.columns = ['tf','score','status']
 
 	# Violin plot
-    p = ggplot(rdf, aes(x='tf', y = 'score', fill='status')) + geom_violin(position=position_dodge(1)) + geom_boxplot(width = 0.1, position=position_dodge(1)) + theme(figure_size=(4,4))
+    p =  ggplot(rdf, aes(x='tf', y = 'score', fill='status'))
+    p += geom_violin(position=position_dodge(1))
+    p += geom_boxplot(width = 0.1, position=position_dodge(1), outlier_alpha=0.1)
+    p += theme(figure_size=(4,4))
 
     return p, rdf

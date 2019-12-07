@@ -433,11 +433,82 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
         # Collect its anomaly vector
         anomaly_vector = anomaly_matrix[xmin:xmax,dataset,tf]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Maximum score along the peak, and double it given that in originl trial most scores were under 400
-        anomaly_score = int(np.clip(np.nanmax(anomaly_vector) * 2000, 0, 1000))
+        #anomaly_score = int(np.clip(np.nanmax(anomaly_vector) * 1000    * 2     , 0, 1000))
+
+        #
+
+        """
+        I CAN'T JUST THROW THAT LIKE HERE (the multiplication I mean) !!!! MUST SAY SO IN THE PAPER OR SOMETHING !!!!!!!
+
+        HMPF since I normalize this is likely just useless.
+        YEAH I REMOVED THIS GODDAMN UNJUSTIFIABLE MULTIPLICATION
+
+        ALSO REMOVE CLIPPING
+        """
+
+
+        anomaly_score_raw = np.nanmax(anomaly_vector) * 1000
+        anomaly_score = int(np.around(anomaly_score))
+
+
 
 
         # TODO : INSTEAD OF MAXIMUM SCORE, MEAN WOULD BE BETTER ACCORDING TO ARTIFICIAL DATA. It sadly makes much more many peaks seen as noise. Try to find a compromise.
+
+        """
+        HMPF KEEP MAX FOR NOW. REMEMBER TO SAY IN THE PAPER THAT I TAKE MAX ?
+        """
+
+
+        # Explain that we multiply by 1000 and round at 1000 to match the typical bed score format
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
         if debug_print : print('Peak : ('+str(xmin)+' -> '+str(xmax)+','+str(tf)+','+str(dataset)+') -- Anomaly = '+str(anomaly_score))
@@ -569,8 +640,27 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name):
             # Center at 500.
             # I take 0.5 * new_score to reduce the dispersion a bit.
             new_score = 500 * (1 + 0.5 * new_score)
+
+
             if np.isnan(new_score) : new_score = 0 # Hotfix
-            new_score = int(np.clip(new_score,0,1000))
+
+
+
+
+
+
+            # ONLY NOW clip at 1000 to match bed format  ! (keep the clipping or not ?)
+            new_score = int(np.around(np.clip(new_score,0,1000)))
+
+
+            """
+            TODO : DO I EVEN KEEP THE CLIPPING OR NOT ???????????????????
+            """
+
+
+
+
+
 
             #new_score = score / max_obs[tf] * 1000
             # print('----------')
