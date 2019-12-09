@@ -328,14 +328,14 @@ def create_weighted_mse(datasets_weights, tf_weights):
 
 
 
-# TODO REPLACE "CONVPEAKDENOISE" EVERYWHERE WITH "ATYPEAK" OR "MODEL"
+# TODO REPLACE "model_atypeak" EVERYWHERE WITH "ATYPEAK" OR "MODEL"
 
 
 
 
 
 
-def create_convpeakdenoise_model(nb_datasets, region_size, nb_tfs,
+def create_model_atypeak_model(nb_datasets, region_size, nb_tfs,
             kernel_nb,kernel_width_in_basepairs, reg_coef_filter,
             pooling_factor, deep_dim,
             optimizer= 'adam', loss = 'mse'):
