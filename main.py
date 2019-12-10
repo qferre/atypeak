@@ -24,7 +24,7 @@ import keras.backend as K
 
 
 ## Custom libraries
-import lib.convpeakdenoise as cp    # Autoencoder functions
+import lib.model_atypeak as cp    # Autoencoder functions
 import lib.data_read as dr          # Process data produced by Makefile
 import lib.artificial_data as ad    # Trivial data for control
 import lib.result_eval as er        # Result production and evaluation
@@ -68,7 +68,7 @@ print('Parameters loaded.')
 
 
 """
-# TODO Compute weights for the loss : based on the `crmtf_dict` object, we know
+# TODO Compute weights for the loss : based on the `crmtf_dict` object and also on the `datapermatrix` and `peaks_per_dataset` objects, we know
 # the number of elements for each combination of TF/dataset.
 """
 
@@ -106,35 +106,6 @@ else:
                             get_matrix, parameters["pad_to"], parameters["crumb"], parameters["squish_factor"])
 
     print("Using real data for the '"+parameters["cell_line"]+"' cell line.")
-
-
-
-
-"""
-# Before proceeding, profiling the batch generator for true data
-# TODO IMPROVE THIS IT IS MOSTLY THE ENTIRE PERFORMANCE HOG
-import cProfile
-cProfile.run('before_batch = next(train_generator)[0]', 'batchstats')
-import pstats
-
-p = pstats.Stats('batchstats')
-p.strip_dirs().sort_stats('tottime').print_stats()
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -188,7 +159,7 @@ def prepare_model_with_parameters(parameters):
 
 
     # Finally, create the model
-    model = cp.create_convpeakdenoise_model(
+    model = cp.create_model_atypeak_model(
         kernel_nb=parameters["nn_kernel_nb"], kernel_width_in_basepairs=parameters["nn_kernel_width_in_basepairs"], reg_coef_filter=parameters["nn_reg_coef_filter"],
         pooling_factor=parameters["nn_pooling_factor"], deep_dim=parameters["nn_deep_dim"],
         region_size = int(parameters["pad_to"] / parameters['squish_factor']),
@@ -207,38 +178,6 @@ def prepare_model_with_parameters(parameters):
 
 # Prepare the model
 model = prepare_model_with_parameters(parameters)
-
-
-
-
-
-
-
-
-
-class EarlyStoppingByLossVal(keras.callbacks.Callback):
-    def __init__(self, monitor='loss', value=0.00001, verbose=0, patience = 0):
-        super(keras.callbacks.Callback, self).__init__()
-        self.monitor = monitor
-        self.value = value
-        self.verbose = verbose
-        self.patience = patience
-        self.wait = 0
-
-    def on_epoch_end(self, epoch, logs={}):
-        current = logs.get(self.monitor)
-        if current is None: warnings.warn("Early stopping requires %s available!" % self.monitor, RuntimeWarning)
-        if current < self.value: self.wait += 1
-        if self.wait >= self.patience:
-            if self.verbose > 0: print("Epoch %05d: early stopping after patience for THR" % epoch)
-            self.model.stop_training = True
-
-
-
-
-
-
-
 
 
 
@@ -289,7 +228,7 @@ def train_model(model,parametrs):
 
     else :
         # Callback for early stopping
-        es = EarlyStoppingByLossVal(monitor='loss', value=parameters['nn_early_stop_loss_absolute'], patience=2)    # Don't stop as soon as exact floor is reached (patience)
+        es = cp.EarlyStoppingByLossVal(monitor='loss', value=parameters['nn_early_stop_loss_absolute'], patience=2)    # Don't stop as soon as exact floor is reached (patience)
 
 
         # Stop in any case after several epochs with no improvement
@@ -299,6 +238,8 @@ def train_model(model,parametrs):
             restore_best_weights = True)
             # Try to combat loss spikes and restore the best weights
 
+        # NEW : I have increased the training : now 48 batches of 48 examples per epoch (and so diminseed the patience to 5 because the "restore_best_weights" clause could restore an overfitted model some time
+        # I observed this wit non-uniform rebuilding, abundance biais, weird artifacts, etc. and making bigger epochs reduced the problem, so we kept it
         """
         # DEBUG : save at every epoch
         class CustomSaver(keras.callbacks.Callback):
@@ -344,11 +285,13 @@ model = train_model(model, parameters)
 
 
 
-
-
 ################################################################################
 ################################# DIAGNOSTIC ###################################
 ################################################################################
+
+# Figure size. TODO make this a parameter ?
+eval_figsize_small = (5,5)
+eval_figsize_large = (8,5)
 
 
 
@@ -357,19 +300,17 @@ model = train_model(model, parameters)
 # CAN BE RUN WITH BOTH TRUE AND ARTIFICIAL OF COURSe, but mostly meant for artifical
 if parameters['perform_model_diagnosis']:
 
-
     # ------------------------------ Evaluation ------------------------------ #
     """
     Explain that most of this part is meant to be run in a Jupyter Kernel
     And that the plots will likely not display in a standard python console
+
+    TO USE IT : set NB_EXAMPLES_TO_DISPLAY higher than 0 !
     """
 
     # TODO : maybe make this draw 20 examples and produce an evaluation pdf with those figures
 
-    NB_EXAMPLES_TO_DISPLAY = 1
-
-    eval_figsize_small = (5,5)
-    eval_figsize_large = (8,5)
+    NB_EXAMPLES_TO_DISPLAY = 0
 
     for i in range(NB_EXAMPLES_TO_DISPLAY):
 
@@ -377,8 +318,13 @@ if parameters['perform_model_diagnosis']:
         before_batch = next(train_generator)[0]
 
         for ID in range(len(before_batch)):
-            before_raw = before_batch[ID,:,:,:,0]
-            #before_raw[:,:,0:4]=0
+
+            before_raw = np.copy(before_batch[ID,:,:,:,0])
+
+            # before_raw[:,5:,:]=0   # REMOVE WATERMAR FOR TEST
+            # before_raw[:,:,5:]=0   # REMOVE WATERMAR FOR TEST
+            # before_raw[:,:3,:]=0   # REMOVE WATERMAR FOR TEST
+
             before = np.around(before_raw-0.11) # Remove crumbing if applicable
             prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
 
@@ -386,10 +332,16 @@ if parameters['perform_model_diagnosis']:
             # 2D - mean along region axis
             before_2d = np.max(before, axis=0)
             plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
-
             prediction_2d = np.max(prediction, axis=0)
-            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), cmap = 'Greens')
+            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
 
+
+            # # FLIPPED
+            # before_raw = np.flip(before_raw, axis = -1)
+            # before = np.around(before_raw-0.11)
+            # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+            # prediction_2d = np.max(prediction, axis=0)
+            # plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens')
 
             utils.plot_3d_matrix(before, figsize=eval_figsize_large)
             clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
@@ -417,7 +369,8 @@ if parameters['perform_model_diagnosis']:
     summed_befores = []
 
     # TODO : MAKE THAT A PARAMETER !
-    for i in range(50):
+    # Should still be high to compensate for batch effects ! careful about interpretation !
+    for i in range(300):
 
         before_batch = next(train_generator)[0]
 
@@ -443,29 +396,14 @@ if parameters['perform_model_diagnosis']:
     sb = np.array(summed_befores).mean(axis=0)
     mean_before_plot = sns.heatmap(sb, annot = True)
 
-    mean_anomaly_values = np.ma.masked_equal(summed_anomalies, 0).mean(axis=0)
-    mean_anomaly_values_plot = sns.heatmap(mean_anomaly_values, annot = True)
-
-    """
-    # TODO SAVE THOSE PLOTS !!!!
-    THIS IS CAPITAL !!!
-    """
+    anomaly_values = np.ma.masked_equal(summed_anomalies, 0)
+    median_anomaly_values = np.ma.median(anomaly_values, axis=0)
+    median_anomaly_values_plot = sns.heatmap(median_anomaly_values, annot = True).get_figure()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # Save this as a diagnostic plot
+    median_anomaly_values_plot.savefig(plot_output_path+'median_anomaly_values.pdf')
 
 
 
@@ -583,7 +521,11 @@ if parameters['perform_model_diagnosis']:
 
 
     # Visualize filters
-    FILTERS_TO_PLOT_MAX = 20
+    FILTERS_TO_PLOT_MAX = 0
+
+    """
+    TODO : TO USE IT, SET FILTERS_TO_PLOT_MAX higher than 0 !!
+    """
 
     # Again, meant to be run in a Jupyter Kernel, not really as a script !
 
@@ -617,12 +559,16 @@ if parameters['perform_model_diagnosis']:
                                 selected_layer = ENCODED_LAYER_NUMBER, output_of_layer_select_this_dim = 2,
                                 #learning_rate = 0.25, nb_steps_gradient_ascent = 250,
                                 learning_rate = 1, nb_steps_gradient_ascent = 50,
-                                blurStdX = 0.2, blurStdY=1E-2,  blurStdZ=1E-2, blurEvery = 5)
+                                blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5)
 
-    for ex in urexamples:
-        ex = ex[...,0] #; rounded_ex = np.around(ex/np.max(ex), decimals = 1)
+
+
+    for exid in range(len(urexamples)):
+        ex=urexamples[exid]
+        ex = ex[...,0]
+        #ex = np.around(ex/np.max(ex), decimals = 1)
         x = np.mean(ex, axis = 0)
-        sns.heatmap(np.flip(x.transpose(), axis=0), cmap ='RdBu_r', center = 0) ; plt.figure()
+        plt.figure(figsize=eval_figsize_small); sns.heatmap(np.flip(x.transpose(), axis=0), cmap ='RdBu_r', center = 0)
 
 
     # Move this somewhere else.
@@ -630,8 +576,10 @@ if parameters['perform_model_diagnosis']:
 
     # Get an encoded representation for comparison (from the latest `before`, from above)
     tmp = cp.get_encoded_representation(before[np.newaxis,...,np.newaxis], model)
-    sns.heatmap(np.transpose(tmp[0])**2)
-    utils.plot_3d_matrix(before[0,...,0])
+    tmpd = np.transpose(tmp[0]**2)
+
+    plt.figure(figsize=eval_figsize_large); sns.heatmap(tmpd)
+    utils.plot_3d_matrix(before)
 
 
     """
@@ -700,15 +648,12 @@ if parameters['perform_model_diagnosis']:
 ################################################################################
 
 
-
-
-
 # Switch : the user should calibrate with Q-score before processing the full data !
 # So in the parameters if the switch process_full_real_data is not on, it should exit here and ther
 
-process_full_real_data = parameters["process_full_real_data"]
 
-if not process_full_real_data:
+
+if not parameters["process_full_real_data"]:
     print("The parameter `process_full_real_data` was set to False, presumably because this was a parameter calibration run.")
     print("Hence, we stop before processing the real data.")
     sys.exit()
@@ -717,24 +662,6 @@ else:
     print("Proceeding with real data. Make sure you have calibrated the model correctly, using notably the Q-score !")
     print("Warning : this can be VERY long.")
 
-
-
-
-    """
-    ############################################################
-    ############################################################
-    ############################################################
-    ############################################################
-    ############################################################
-    ############################################################
-    # TODO MOVE BED FILE CREATION HERE !!!! IT IS LONG SO ONLY PRODUCE IT WHEN ABSOLUTELY NECESSARY !
-    ############################################################
-    ############################################################
-    ############################################################
-    ############################################################
-    ############################################################
-    ############################################################
-    """
 
     ################################ DENOISING/PRODUCE REAL DATA #####################################
     # Use the now-trained model on all data.
@@ -854,9 +781,9 @@ else:
             average_rebuilt_crm_fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
 
 
-
-            # Careful : some horizontal "ghosting" might be due to summed crumbing
-
+            """
+            # Careful : some horizontal "ghosting" might be due to summed crumbing. TODO NOTE IN PAPER !!!!
+            """
 
             """
             SAVE THE ABOVE FIGS SHOMEWHERE
@@ -885,12 +812,10 @@ else:
 
 
 
-            # NOTE THIS IS DONE ALL THE TIME, NOT JUST IF EVAL IS TRUE
 
 
-            # # Plot output path
-            # plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/'
-            # if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
+
+
 
 
             average_crm_fig.savefig(plot_output_path+'average_crm.pdf')
@@ -931,7 +856,16 @@ else:
 
             # ----------------- Scores when known cofactors (or known non-cofactors) are present
 
-            # Work on NORMALIZED scores
+            print("Retrieving scores for specified TF pairs...")
+
+
+
+
+            # Work on NORMALIZED scores. TODO SAY SO IN PAPER FIGURES AND IN DEBUG MESSAGES and/or comments here !!!!!
+
+
+
+
 
             atypeak_result_file_normalized = output_bed_path + "_normalized_by_tf.bed"
             crm_file_path = "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
@@ -942,7 +876,11 @@ else:
             tfs_to_plot = parameters['tf_pairs']
 
             for pair in tfs_to_plot:
-                # TODO CAREFUL ABOUT CASE !!
-                tf1, tf2 = pair
-                p, _ = er.get_scores_whether_copresent(tf1, tf2, atypeak_result_file_normalized, crm_file_path)
-                p.save(plot_output_path+"tfdiag_"+tf1+"_"+tf2+".pdf")
+                try:
+                    # TODO CAREFUL ABOUT CASE !!
+                    tf1, tf2 = pair
+                    p, _ = er.get_scores_whether_copresent(tf1, tf2, atypeak_result_file_normalized, crm_file_path)
+                    p.save(plot_output_path+"tfdiag_"+tf1+"_"+tf2+".pdf")
+                except:
+                    print("Error fetching the pair : "+str(pair))
+                    print("Ignoring.")

@@ -7,7 +7,7 @@ import random
 
 
 from lib import utils
-from lib import convpeakdenoise as cr
+from lib import model_atypeak as cr
 
 """
 Functions to generate artificial data for model evaluation.
@@ -131,6 +131,7 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
 
         ## Write to matrix
         # WARNING intensity must be between 0 and 1 !
+        # Or must it ?
         # Let's clip at 0-1000 and divide by 1000
         intensity_clipped = np.clip(intensity,0,1000) / 1000
 

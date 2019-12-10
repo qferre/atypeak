@@ -310,6 +310,24 @@ def create_weighted_mse(datasets_weights, tf_weights):
 
 
 
+# Callback to potentially stop the model as soon as a given loss value is reached
+class EarlyStoppingByLossVal(keras.callbacks.Callback):
+    def __init__(self, monitor='loss', value=0.00001, verbose=0, patience = 0):
+        super(keras.callbacks.Callback, self).__init__()
+        self.monitor = monitor ; self.value = value
+        self.verbose = verbose
+        self.patience = patience ; self.wait = 0
+
+    def on_epoch_end(self, epoch, logs={}):
+        current = logs.get(self.monitor)
+        if current is None: warnings.warn("Early stopping requires %s available!" % self.monitor, RuntimeWarning)
+        if current < self.value: self.wait += 1
+        if self.wait >= self.patience:
+            if self.verbose > 0: print("Epoch %05d: early stopping after patience for THR" % epoch)
+            self.model.stop_training = True
+
+
+
 
 
 

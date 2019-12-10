@@ -13,9 +13,7 @@ Please see the paper for more details.
 
 ## Description
 
-### Summary of philosophy
-
-Please see the paper. Quickly summarize : few layers, stacked multiview, compression to lose anomalies and keep good features
+Quickly summarize the philosphy : few layers, stacked multiview, compression to lose anomalies and keep good features
 
 
 ### Results availability
@@ -26,9 +24,6 @@ ReMap data has been processed, available here : www.remap/the_tab_that_Benoit_pr
 
 The raw data included here is a subset of ReMap 2018 data, source is <remap link>
 
-
-
-In this repository, data is managed by git lfs !
 
 
 ## Usage
@@ -130,7 +125,7 @@ The other fields are discarded.
 
 ## Contributing
 
-The *master* branch contains released code ; the *develop* branch is used by me for improvements.
+
 
 Please feel free to post issues on GitHub !
 
@@ -167,4 +162,4 @@ This code is available under the GNU GPL3 license.
 Quentin Ferré -- quentin.ferre@gmail.com
 
 
- Acknowledgements : Cécile Capponi, Benoît Ballester, maybe also Denis, maybe also Marina and Luc ?
+ Acknowledgements : Jeanne, Cécile Capponi, Benoît Ballester, maybe also Denis, maybe also Marina and Luc ?
