@@ -752,6 +752,8 @@ else:
         print('Producing bed file : '+output_bed_path)
         er.produce_result_file(all_matrices, output_bed_path, model, get_matrix, parameters, datasets_clean, cl_tfs)
 
+        er.print_merge_doublons(output_bed_path) # Put mean score for doublons
+
 
         """
         # DEBUG TEST TIME
@@ -769,7 +771,11 @@ else:
 
         # ---- Normalize by TF -----
         # Normalize the score by TF, to try to counter the frequency problem problem
-        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_path, cl_name = parameters['cell_line'])
+        output_bed_path_normalized = output_bed_path + "_normalized_by_tf.bed"
+        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_path, cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized)
+
+
+        er.print_merge_doublons(output_bed_path_normalized) # Put mean score for doublons
 
         # A new result file labeled _normalized has been produced.
         print('Processing complete.')

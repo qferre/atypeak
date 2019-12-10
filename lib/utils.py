@@ -10,22 +10,17 @@ import sys
 import numpy as np
 import pandas as pd
 
-#import pybedtools # Not sure it's needed ?
-from plotnine import (ggplot, aes, geom_histogram, geom_violin,
-                        scale_fill_grey, geom_boxplot, position_dodge, theme)
-
-#from lib import utils # Circular import !
-from lib import artificial_data
-
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-import numpy as np
+from plotnine import ggplot, aes, theme, position_dodge, scale_fill_grey
+from plotnine import geom_histogram, geom_violin, geom_boxplot
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import skimage.measure
-import pandas as pd
+
+from lib import artificial_data
+
 
 #
 # def add_noise(mat, frequencies, return_pos):
@@ -554,7 +549,7 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 # tmp[3] = '.'.join(tmp[3])
 # '\t'.join(tmp)
 
-def normalize_result_file_score_by_tf(result_file_path, cl_name):
+def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = None):
 
     scores_tf=dict()
     scores_datasets=dict()
@@ -614,7 +609,8 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name):
 
     # Write a normalized file
     # WE NORMALIZE BY TF ONLY ! I keep the scores by dataset only for information !
-    normalized_rf = open(result_file_path+'_normalized_by_tf.bed','w')
+    if outfilepath is None : outfilepath = result_file_path + "_normalized_by_tf.bed" # Default file path
+    normalized_rf = open(outfilepath,'w')
     # Header
     normalized_rf.write('track name ='+cl_name+'_tf-normalized description="'+cl_name+' peaks with anomaly score - normalized by TF" useScore=1'+'\n')
 

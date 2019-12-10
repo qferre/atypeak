@@ -29,16 +29,10 @@ def anomaly(before, prediction):
     Both argument should be 3d NumPy arrays.
 
 
-
-
-
     WARNING : May be a misnomer, as a score of 1 means "good", not "anomalous !"
 
 
-
     Note : this is all designed to work with scores, but for now the peaks all have scores of 1 when present.
-
-
     """
 
     # TODO return the un-crumbed matrix for use as a mask
@@ -103,7 +97,7 @@ def produce_result_file(all_matrices, output_path, model,
         # Collect original matrix and lines
         current_matrix, origin_data_file, crm_start = get_matrix_method(m, return_data_lines = True)
 
-        # Pad the matrix (much like we do in convpeakdenoise.generator_unsparse)
+        # Pad the matrix (much like we do in model_atypeak.generator_unsparse)
         # TODO this will no longer be required once the padding will have been moved to the get_matrix() method itself
         # TODO The method must also return crm_length then for coordinate correction !
         crm_length = current_matrix.shape[0]
@@ -159,8 +153,7 @@ def produce_result_file(all_matrices, output_path, model,
 
 
 
-
-def merge_doublons(bedfilepath, ignore_first_line_header = True):
+def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpath = None):
     """
     Peaks can sometimes be divided into two different 3200-long matrices,
     meaning they get two scores, one for each rebuilt matrix.
@@ -170,20 +163,22 @@ def merge_doublons(bedfilepath, ignore_first_line_header = True):
     Since the coordinates of the peaks are based on the original data file, not
     the matrix itself, merging is easier
     """
-    # TODO : make this an awk command
 
     if ignore_first_line_header: skiprows = 1
     else : skiprows = None
 
     bed = pd.read_csv(bedfilepath, header = None, sep = '\t', skiprows = skiprows)
 
+    mergedbed = bed.groupby(by=[0,1,2,3]).agg({4:'mean'})
 
-    bed.groupby(by=[0,1,2,3]).agg({4:'mean'})
+    # Default path
+    if outputpath is None : outputpath = bedfilepath + "_merged_doublons.bed"
+
+    mergedbed.to_csv(outputpath, header=False, index=True, sep = '\t')
 
 
-    """"
-    TODO RETURN BED AND USE THIS AT SOME POINT NO ????
-    """
+
+
 
 
 
