@@ -5,7 +5,7 @@ SHELL = /bin/bash
 .PHONY: install prepare run
 
 
-# ---------------------------------- Parameters ------------------------------ #
+# ------------------------------ Parameters ---------------------------------- #
 
 # The CRM matrices should have this size (for makewindows, padding will be
 # done in Python later)
@@ -15,15 +15,13 @@ CRM_WINDOW_SIZE = 3200
 CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed
 
-
+# ---------------------------------------------------------------------------- #
 
 
 
 
 # Important !
 .ONESHELL:
-
-
 
 
 
@@ -36,33 +34,27 @@ install:
 	# conda update --all
 
 
-
+# Turn the raw input_data into something readable by the model
 prepare: decompress copybin intersect convert dictionaries split
 
 
-
+# Run the model with the parameters specified in parameters.yaml
 run:
 	conda activate atypeak
 	python3 main.py
 
 
+clean :
+	# Remove all data and results
+	rm -rf ./data/input/
+	rm -rf ./data/output/
+	# We however keep the compresed input_raw
 
 
 
-################################################################################
-############################			RULES			####################################
-################################################################################
-
-#download:
-	# # Download the peaks
-	# wget http://tagc.univ-mrs.fr/remap/download/remap2018/hg38/MACS/remap2018_all_macs2_hg38_v1_2.bed.gz
-	# gunzip remap2018_all_macs2_hg38_v1_2.bed.gz
-
-	# MAYBE DON'T DOWNLOAD AND INSTEAD INCLUDE ALL THE FILES
-	# BUT WITH ONLY JEANNE'S SELECTION OF TFs AND CELL LINES ?
-	# OKAY I'M DOING THAT. SPECIFY THAT IN THE README.
 
 
+##############################		RULES		######################################
 
 
 decompress:
@@ -86,11 +78,6 @@ decompress:
 	#perl -p -e 's/ /\t/g' untabulated.bed > remap2018_allpeaks_macs2score_Minuslog10.bed
 	#rm untabulated.bed
 	# Already done in current version on GitHub
-
-
-
-
-
 
 	# Run the python script which selects the data based on the selection by Jeanne
 	#python3 ./data/input/filter_file.py
@@ -163,39 +150,11 @@ dictionaries:
 	awk -F"|" '$$1==i{a=a"|"$$2}$$1!=i{print i"|"a; a=$$2}{i=$$1}END{print i"|"a}' cell_line_crm_tf_tuples_untreated.txt > cell_line_crm_tf_tuples.txt
 	tail -n +2 cell_line_crm_tf_tuples.txt > clcrmtf.tmp && mv clcrmtf.tmp cell_line_crm_tf_tuples.txt # Remove garbage first line from crm_tf_couples.txt
 
-
-
-
-
-
-
-
 	### We also need, for each of those matrices, the number of datasets which will provide a peak
 	cut sorted_intersect.txt -f1,2,3,4 | uniq |\
 	rev | uniq -f1 -c | rev | tr ' ' '\t' | cut -f1,2,3,5 > nb_datasets_per_matrix.txt
 	# WARNING the line counts are reversed due to the commands used here (they will be reversed again in Python processing)
-	# TODO Maybe remove this (both here and all across python code), I don't think i'm using it anymore ????????????????????
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	# TODO Not currenty used. Would be useful for weighted losses.
 
 	# Clean up
 	rm -f cell_line_crm_tf_tuples_untreated.txt
@@ -242,28 +201,10 @@ split:
 
 
 
-
-clean :
-	# Remove all data and results
-	rm -rf ./data/input/
-	rm -rf ./data/output/
-	# We however keep the compresed input_raw
-
-
-
-
-
-
-
-
-
-
-
-
 ### TODO remember to add those to .PHONY
 
 
-# Temporary, for sacapus tests
+# Temporary, for sacapus cluster tests
 sacapus_run:
 	COMMAND="""mkdir -p qsub_output
 	conda activate atypeak
