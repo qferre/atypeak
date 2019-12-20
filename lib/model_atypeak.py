@@ -1,11 +1,13 @@
+import numpy as np
+import scipy.sparse
+
+import keras
 from keras.models import Sequential, Model
 from keras.layers import Conv3D, MaxPool3D, UpSampling3D, ZeroPadding3D
 from keras.layers import Input, Dense, Dropout, Lambda
 from keras import regularizers
 from keras import backend as K
 
-import numpy as np
-import scipy.sparse
 
 from lib import utils
 
@@ -370,17 +372,17 @@ def create_model_atypeak_model(nb_datasets, region_size, nb_tfs,
     """
 
 
-"""
-# nb_datasets = 10
-# region_size = 320
-# nb_tfs = 8
-# kernel_nb = 16
-# kernel_width_in_basepairs = 20
-# reg_coef_filter = 0.01
-# pooling_factor = 2
-# optimizer= 'adam'
-# loss = 'mse'
-# deep_dim = 32
+    """
+    # nb_datasets = 10
+    # region_size = 320
+    # nb_tfs = 8
+    # kernel_nb = 16
+    # kernel_width_in_basepairs = 20
+    # reg_coef_filter = 0.01
+    # pooling_factor = 2
+    # optimizer= 'adam'
+    # loss = 'mse'
+    # deep_dim = 32
     #
 
     #
@@ -397,7 +399,7 @@ def create_model_atypeak_model(nb_datasets, region_size, nb_tfs,
     #
     # Wait. Do I even need to take care about that ?
     #
-"""
+    """
 
 
 

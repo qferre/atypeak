@@ -220,6 +220,13 @@ def make_a_fake_matrix(region_length,nb_datasets,nb_tfs, reliable_datasets = Non
     # TODO : not all datasets correlate ! assign different probas ? Or simply draw from reliable_datasets
     # datasets = np.random.choice(reliable_datasets,k)
 
+
+    """
+    TODO : weighted choice here ! to confirm my theory that intra group abundance biais is linear with abundance !
+    """
+
+
+
     common_center = int(ss.uniform(0,region_length).rvs())
 
     # In some cases you may not want to write true peaks and produce only noise, you should set signal to false in this case

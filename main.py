@@ -65,7 +65,9 @@ datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets]
 datasets_clean = sorted(list(set(datasets_clean_ori)), key=datasets_clean_ori.index) # Make unique while preserving order, which a `set` would not do
 print('Parameters loaded.')
 
+cl_tfs
 
+datasets
 
 """
 # TODO Compute weights for the loss : based on the `crmtf_dict` object and also on the `datapermatrix` and `peaks_per_dataset` objects, we know
@@ -318,6 +320,18 @@ if parameters['perform_model_diagnosis']:
         before_batch = next(train_generator)[0]
 
         for ID in range(len(before_batch)):
+
+
+
+
+
+            #ID = 2
+
+
+
+
+
+
 
             before_raw = np.copy(before_batch[ID,:,:,:,0])
 
@@ -649,7 +663,10 @@ if parameters['perform_model_diagnosis']:
 
 
 # Switch : the user should calibrate with Q-score before processing the full data !
-# So in the parameters if the switch process_full_real_data is not on, it should exit here and ther
+# So in the parameters if the switch process_full_real_data is not on, it should exit here and there
+
+import importlib
+importlib.reload(utils)
 
 
 
@@ -774,11 +791,11 @@ else:
 
             average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
 
-            summed = np.mean(before, axis=0)
-            fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
-
-            summed = np.mean(clipped_pred, axis=0)
-            average_rebuilt_crm_fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
+            # summed = np.mean(before, axis=0)
+            # fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
+            #
+            # summed = np.mean(clipped_pred, axis=0)
+            # average_rebuilt_crm_fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
 
 
             """

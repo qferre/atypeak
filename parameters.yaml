@@ -79,7 +79,7 @@ artificial_tfgroup_split: 0.666
 artificial_overlapping_groups: False
 
 # Core parameter : used all across the program, including in training !
-random_seed: 666 # Replace with 42 :)
+random_seed: 42
 
 # Distribution of scores depending on TF presence pairs to visualize
 # Only used in real data, not artificial
@@ -98,7 +98,7 @@ tf_pairs:
   - ["brd4", "rcor1"]
   - ["znf143", "rcor1"]
   - ["ell2", "phf8"]
-  - ["ell2", "brd4"]]
+  - ["ell2", "brd4"]
 
 # FOR K562:
 # tf_pairs:

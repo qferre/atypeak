@@ -469,7 +469,7 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
 
         anomaly_score_raw = np.nanmax(anomaly_vector) * 1000
-        anomaly_score = int(np.around(anomaly_score))
+        anomaly_score = int(np.around(anomaly_score_raw))
 
 
 
@@ -680,3 +680,81 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
 
 
     return scores_df_tf, scores_df_datasets
+
+
+
+"""
+
+import numpy as np
+import seaborn as sns
+
+all_tfs = ['aff4',
+ 'brd4',
+ 'e2f1',
+ 'ell2',
+ 'gabpa',
+ 'hcfc1',
+ 'myc',
+ 'nr2c2',
+ 'phf8',
+ 'rcor1',
+ 'sfmbt1',
+ 'yy1',
+ 'znf143']
+
+all_datasets = ['GSE20303',
+ 'GSE22478',
+ 'GSE31417',
+ 'GSE39263',
+ 'GSE40632',
+ 'GSE44672',
+ 'GSE45441',
+ 'GSE46237',
+ 'GSE51633']
+
+crm_length = 3200
+
+def estimate_corr_group(model,all_datasets,all_tfs, crm_length =3200):
+
+    # Create an empty CRM
+    x = np.empty((crm_length,len(all_datasets),len(all_tfs)))
+
+    # Add a major peak for this particular dataset+tf pair across the entire region
+    # Use a value of 10 or 100 to force MSE to show groups
+    VALUE = 10
+    curr_dataset = 3
+    curr_tf = 1
+    x[:,curr_dataset, curr_tf] = VALUE
+
+    x.shape
+    plot_3d_matrix(x)
+
+
+    prediction = model.predict(x[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+
+    prediction_2d = np.max(prediction, axis=0) # 2D - mean along region axis
+
+
+
+
+
+
+
+def crm_normalize():
+
+    I should still display the scores by dataset and by tf for reference, but add in comments that corrgroup normalization is likely more important
+
+
+    first, build the library
+
+    for each tf, dataset pair, produce a crm with only it at a value of 10 across it and rebuild it and record it
+        for that, need to see the average crm no ? ensure the order of tfs and datasets is kept ! I think it currenly is !
+
+
+
+    then writing the normalized file
+    read from the line which tf and dataset this line belongs to
+    apply correction
+    write normalized file
+
+"""

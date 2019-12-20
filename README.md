@@ -37,7 +37,7 @@ TOBE BE MORE DESCRIPTIVE !
 BE SURE TO CHANGE THE CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE !!!
 
-- Run `make prepare` to process the input data, that is to say split it
+- Run `make prepare` to transform the input_raw into an input readable by the model (mostly involves making an index of peak positions)
 
 - Set the parameters in *parameters.yaml*
 
