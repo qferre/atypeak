@@ -567,7 +567,7 @@ def normalize_result_file_intra_group_bias(result_file_path, scaling_factor_dict
         if (line[0:10] != 'track name'):
             line = line.split('\t') ; line[3] = line[3].split('.')
             dataset = line[3][0]; tf = line[3][1]
-             score = float(line[4])
+            score = float(line[4])
 
              # Apply scaling factor
             new_score = score * scaling_factor_dict[(dataset, tf)]
