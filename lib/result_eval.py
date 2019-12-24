@@ -8,6 +8,8 @@ import os
 import sys
 import time
 import functools
+import itertools
+
 
 import pybedtools
 import numpy as np
@@ -179,6 +181,100 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
 
 
 
+
+# ---- Corr group and biais correction
+
+def estimate_corr_group(model, all_datasets, all_tfs, crm_length=3200, squish_factor = 10):
+    """
+    Estimates the corr group for each dataset+tf pair by looking at the added phantoms
+
+    all_datasets and all_tfs are lists of names (eg. ['d01','d02'],['FOS','JUN'])
+
+    Returns a scaling factor to be applied compensating for intra-group biais
+    """
+
+    scaling_factor = dict()
+
+    # All possible combinations
+    all_combis = list(itertools.product(all_datasets, all_tfs))
+
+    all_combis
+
+    for combi in all_combis:
+
+
+
+        #combi = (1,4)
+
+
+
+
+
+        # Create an empty CRM
+        x = np.empty((crm_length,len(all_datasets),len(all_tfs)))
+
+        # Add a major peak for this particular dataset+tf pair across the entire region
+        # Use a value of 10 or 100 to force MSE to show groups ??
+        # No use 1 instead to prevent affine pbs
+        VALUE = 1
+        curr_dataset = combi[0] # get id in list of the dataset
+        curr_tf = combi[1] # get id in list of the tf
+
+        # Convert dataset and tf to the approriate coordinates
+        curr_dataset_id = all_datasets.index(curr_dataset)
+        curr_tf_id = all_tfs.index(curr_tf)
+
+        x[:,curr_dataset_id, curr_tf_id] = VALUE
+
+
+
+
+        xp = utils.squish(x, factor = squish_factor)
+        xp2 = xp[np.newaxis, ..., np.newaxis]
+
+        prediction = model.predict(xp2)[0,:,:,:,0]
+
+        # VERY IMPORTANT THAT HERE IT IS THE MEAN. TODO SAY SO IN PAPER !!!
+        prediction_2d = np.mean(prediction, axis=0) # 2D - mean along region axis
+
+        """
+        sns.heatmap(np.mean(xp, axis=0), annot = True)
+        sns.heatmap(prediction_2d, annot = True)
+        """
+
+        #result[(curr_dataset, curr_tf)] = np.copy(prediction_2d)
+
+
+        # Now compute the scaling factor somehow
+
+        # Simply VALUE/rebuilt_value ??
+        # no it's about the biais WITHIN the group so scaling factor should be
+        # 1 - (max_value_in_group - value_of_current_tfdatasetpair_in_group)/VALUE
+
+
+        # To prevent oddballs/outliers like watermark, this is instead the mean of top 3 values
+        # Should also drag down said outliers
+        TOP = 4
+        allvalues = np.ravel(prediction_2d)
+        top = allvalues[np.argsort(allvalues)[-TOP:]]
+        max_value_in_group = np.mean(top)
+        max_value_in_group
+        top
+
+        # CAREFUL ABOUT WHETHER IT IS TRANSPOSED OR NOT !!!!!!!!!!! IT APPEARS OKAY HERE WITH THIS FORMULA so probably remove this warning
+        value_of_current_tfdatasetpair_in_group = prediction_2d[curr_dataset, curr_tf]
+
+        value_of_current_tfdatasetpair_in_group
+
+        scaling_factor_current = (max_value_in_group / value_of_current_tfdatasetpair_in_group)/VALUE
+
+        scaling_factor_current
+
+
+
+        scaling_factor[(curr_dataset, curr_tf)] = scaling_factor_current
+
+    return scaling_factor
 
 
 

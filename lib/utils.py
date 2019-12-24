@@ -549,6 +549,42 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 # tmp[3] = '.'.join(tmp[3])
 # '\t'.join(tmp)
 
+
+
+def normalize_result_file_intra_group_bias(result_file_path, scaling_factor_dict, cl_name, outfilepath = None):
+
+    # Write a normalized file
+    # WE NORMALIZE BY TF ONLY ! I keep the scores by dataset only for information !
+    if outfilepath is None : outfilepath = result_file_path + "_normalized_intra_corr_group.bed" # Default file path
+    normalized_rf = open(outfilepath,'w')
+    # Header
+    normalized_rf.write('track name ='+cl_name+'_corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized intra correlation group" useScore=1'+'\n')
+
+
+    rf = open(result_file_path,'r')
+
+    for line in rf:
+        if (line[0:10] != 'track name'):
+            line = line.split('\t') ; line[3] = line[3].split('.')
+            dataset = line[3][0]; tf = line[3][1]
+             score = float(line[4])
+
+             # Apply scaling factor
+            new_score = score * scaling_factor_dict[(dataset, tf)]
+
+
+            # Rejoin line and write it
+            line[4] = str(new_score)
+            line[3] = '.'.join(line[3])
+            line = '\t'.join(line)
+            normalized_rf.write(line)
+
+
+    normalized_rf.close()
+    rf.close()
+
+
+
 def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = None):
 
     scores_tf=dict()
@@ -680,81 +716,3 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
 
 
     return scores_df_tf, scores_df_datasets
-
-
-
-"""
-
-import numpy as np
-import seaborn as sns
-
-all_tfs = ['aff4',
- 'brd4',
- 'e2f1',
- 'ell2',
- 'gabpa',
- 'hcfc1',
- 'myc',
- 'nr2c2',
- 'phf8',
- 'rcor1',
- 'sfmbt1',
- 'yy1',
- 'znf143']
-
-all_datasets = ['GSE20303',
- 'GSE22478',
- 'GSE31417',
- 'GSE39263',
- 'GSE40632',
- 'GSE44672',
- 'GSE45441',
- 'GSE46237',
- 'GSE51633']
-
-crm_length = 3200
-
-def estimate_corr_group(model,all_datasets,all_tfs, crm_length =3200):
-
-    # Create an empty CRM
-    x = np.empty((crm_length,len(all_datasets),len(all_tfs)))
-
-    # Add a major peak for this particular dataset+tf pair across the entire region
-    # Use a value of 10 or 100 to force MSE to show groups
-    VALUE = 10
-    curr_dataset = 3
-    curr_tf = 1
-    x[:,curr_dataset, curr_tf] = VALUE
-
-    x.shape
-    plot_3d_matrix(x)
-
-
-    prediction = model.predict(x[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-
-    prediction_2d = np.max(prediction, axis=0) # 2D - mean along region axis
-
-
-
-
-
-
-
-def crm_normalize():
-
-    I should still display the scores by dataset and by tf for reference, but add in comments that corrgroup normalization is likely more important
-
-
-    first, build the library
-
-    for each tf, dataset pair, produce a crm with only it at a value of 10 across it and rebuild it and record it
-        for that, need to see the average crm no ? ensure the order of tfs and datasets is kept ! I think it currenly is !
-
-
-
-    then writing the normalized file
-    read from the line which tf and dataset this line belongs to
-    apply correction
-    write normalized file
-
-"""

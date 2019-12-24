@@ -157,6 +157,7 @@ def prepare_model_with_parameters(parameters):
     datasets_weights = [1] * nb_datasets_model
     weighted_mse = cp.create_weighted_mse(datasets_weights, tf_weights)
 
+    # TODO : make a 2d matrix of weights instead, one weight for each specific tf+dataset pair
 
 
 
@@ -287,6 +288,12 @@ model = train_model(model, parameters)
 
 
 
+
+
+
+
+
+
 ################################################################################
 ################################# DIAGNOSTIC ###################################
 ################################################################################
@@ -294,8 +301,6 @@ model = train_model(model, parameters)
 # Figure size. TODO make this a parameter ?
 eval_figsize_small = (5,5)
 eval_figsize_large = (8,5)
-
-
 
 # Perform some diagnosis on the model, only if the config flag is true.
 # Notably, uselsss when reloading a model
@@ -323,13 +328,10 @@ if parameters['perform_model_diagnosis']:
 
 
 
+            #
+            ID = 2
 
-
-            #ID = 2
-
-
-
-
+            before_batch = next(train_generator)[0]
 
 
 
@@ -338,6 +340,8 @@ if parameters['perform_model_diagnosis']:
             # before_raw[:,5:,:]=0   # REMOVE WATERMAR FOR TEST
             # before_raw[:,:,5:]=0   # REMOVE WATERMAR FOR TEST
             # before_raw[:,:3,:]=0   # REMOVE WATERMAR FOR TEST
+            #before_raw[:,:,:4]=0   # REMOVE WATERMAR FOR TEST
+            #before_raw[:,:,3:]=0   # REMOVE WATERMAR FOR TEST
 
             before = np.around(before_raw-0.11) # Remove crumbing if applicable
             prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
@@ -349,13 +353,30 @@ if parameters['perform_model_diagnosis']:
             prediction_2d = np.max(prediction, axis=0)
             plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
 
-
+            #plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
             # # FLIPPED
-            # before_raw = np.flip(before_raw, axis = -1)
-            # before = np.around(before_raw-0.11)
-            # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-            # prediction_2d = np.max(prediction, axis=0)
-            # plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens')
+            before_raw = np.flip(before_raw, axis = -1)
+            before = np.around(before_raw-0.11)
+            prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+            prediction_2d = np.max(prediction, axis=0)
+            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
             utils.plot_3d_matrix(before, figsize=eval_figsize_large)
             clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
@@ -713,13 +734,25 @@ else:
 
 
 
-        # ---- Normalize by TF -----
-        # Normalize the score by TF, to try to counter the frequency problem problem
-        output_bed_path_normalized = output_bed_path + "_normalized_by_tf.bed"
+        # ---- Normalization ----
+
+
+        ### First normalize intra group
+
+        # Estimate intra group scaling factors
+        scaling_factor_dict = er.estimate_corr_group(model, all_datasets, all_tfs, crm_length=parameters['pad_to'], squish_factor =parameters["squish_factor"])
+
+
+        output_path_intra_corr_group_normalized = output_bed_path + "_normalized_intra_corr_group.bed"
+        utils.normalize_result_file_intra_group_bias(output_bed_path, scaling_factor_dict, cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized)
+
+
+        ### Then Normalize the score by TF, to try to counter the frequency problem problem
+        output_bed_path_normalized = output_path_intra_corr_group_normalized + "_normalized_by_tf.bed"
         scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_path, cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized)
 
 
-        er.print_merge_doublons(output_bed_path_normalized) # Put mean score for doublons
+        #er.print_merge_doublons(output_bed_path_normalized) # Put mean score for doublons
 
         # A new result file labeled _normalized has been produced.
         print('Processing complete.')
