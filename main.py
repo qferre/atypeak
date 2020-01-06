@@ -270,10 +270,10 @@ def train_model(model,parametrs):
         if not parameters['use_artificial_data'] :
             save_model_path = root_path+"/data/output/model/trained_model_"+parameters['cell_line']
         else:
-            save_model_path = root_path+"/data/output/model/trained_model_ARTIFICIAL")
+            save_model_path = root_path+"/data/output/model/trained_model_ARTIFICIAL"
         loss_history = model.history.history["loss"]
         model.save(save_model_path+'.h5')
-        np.savetxt(save_model_path"_loss_history.txt", np.array(loss_history), delimiter=",")
+        np.savetxt(save_model_path+"_loss_history.txt", np.array(loss_history), delimiter=",")
         print('Model saved.')
 
 
