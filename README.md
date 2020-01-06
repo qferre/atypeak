@@ -30,6 +30,10 @@ The raw data included here is a subset of ReMap 2018 data, source is <remap link
 
 TOBE BE MORE DESCRIPTIVE !
 
+### Installation
+
+Works only on linux and macos due to pybedtools
+
 - Run `make install`, to create a conda environment.
 
 - Place the input data in *./data/input_raw/* and follow the correct data format, outlined in ./data/input_raw/data_format.md
@@ -38,6 +42,8 @@ BE SURE TO CHANGE THE CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE !!!
 
 - Run `make prepare` to transform the input_raw into an input readable by the model (mostly involves making an index of peak positions)
+
+### Running
 
 - Set the parameters in *parameters.yaml*
 
