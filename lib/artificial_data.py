@@ -1,10 +1,7 @@
-import scipy.sparse as sp
 import scipy.stats as ss
 import numpy as np
 
 import random
-
-
 
 from lib import utils
 from lib import model_atypeak as cr
@@ -22,16 +19,7 @@ The goal is to show that the model will usually rebuilt the correlation group as
 
 
 
-
-
-
-
-
-
-
-
-
-def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.arange(16)
+def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.arange(16),
                     nb_datasets = 16, nb_tfs = 10, squish_factor = 10, ones_only = False,
                     watermark_prob = 0.75, tfgroup_split = 2/3, overlapping_groups = False, crumb = None):
     """
@@ -49,8 +37,9 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
         batch_features = list()
         batch_status = list()
         for i in range(batch_size):
-            #X = make_a_fake_matrix(region_length,nb_datasets,nb_tfs,reliable_datasets)
-            X = make_a_fake_matrix(region_length, nb_datasets, nb_tfs, ones_only=ones_only, watermark_prob=watermark_prob, tfgroup_split=tfgroup_split, overlapping_groups=overlapping_groups)
+            X = make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
+                ones_only=ones_only, watermark_prob=watermark_prob,
+                tfgroup_split=tfgroup_split, overlapping_groups=overlapping_groups)
 
             if crumb != None :
                 # To counter sparsity, add crumbs (see function documentation)
@@ -59,7 +48,6 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
             Xi = X[..., np.newaxis] # Add meaningless 'channel' dimension
             batch_features.append(Xi)
             batch_status.append('data')
-
 
 
         """
@@ -91,15 +79,8 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
         result = np.array(result)
         target = np.array(target)
 
-        """
-        result = utils.squish(np.array(result), squish_factor, squishing_a_batch = True)
-        target = utils.squish(np.array(target), squish_factor, squishing_a_batch = True)
-        """
 
         yield (result,target)
-
-
-
 
 
 
@@ -119,7 +100,7 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
     """
 
     mat = np.zeros((region_length,nb_datasets,nb_tfs))
-    # TODO make this a sparse matrix ? is that really necessary ? If not remove scipy.sparse import
+    # TODO make this a sparse matrix ? Is that really necessary ?
 
     # Now write the peaks to the matrix
     for peak in peaks:
@@ -136,7 +117,6 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
         intensity_clipped = np.clip(intensity,0,1000) / 1000
 
 
-
         # Write peak
         mat[begin:end,dataset,tf] = mat[begin:end,dataset,tf] + intensity_clipped
 
@@ -150,27 +130,10 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
         if ones_only : mat[begin:end,dataset,tf] = 1
 
 
-
-    """
-    # Debug : transpose the TF and dataset axis. I used this to test a theory
-    # about whether there is a precision biais towards one or tht other
-    # TODO MAKE THIS A PARAMETER LIKE THE REST !!!!
-    if debug_transpose :
-        mat = np.transpose(mat,(0,2,1))
-    """
-
-
+    # # Debug : transpose the TF and dataset axis.
+    # if debug_transpose : mat = np.transpose(mat,(0,2,1))
 
     return mat
-
-
-
-
-
-
-
-
-
 
 
 

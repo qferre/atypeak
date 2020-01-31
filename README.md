@@ -122,6 +122,19 @@ dataset_id.transcription_factor_name.cell_line_name
 The other fields are discarded.
 
 
+### Output
+
+Explain the contents
+
+- model contains the saved model and parameters
+- diagnostic contains various diagnostic plot
+- bed contains the result files, and tsvs of scores
+
+EXPLAIN THE SIGNIFICATION OF THE VARIOUS BEDS
+
+The one you want is "{cell_line}_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
+
+The paper as well as comments in main.py explain the rest
 
 ## Contributing
 
@@ -162,4 +175,4 @@ This code is available under the GNU GPL3 license.
 Quentin Ferré -- quentin.ferre@gmail.com
 
 
- Acknowledgements : Jeanne, Cécile Capponi, Benoît Ballester, maybe also Denis, maybe also Marina and Luc ?
+ Acknowledgements : Jeanne, Cécile Capponi, Benoît Ballester, maybe also Denis

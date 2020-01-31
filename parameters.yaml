@@ -90,7 +90,7 @@ random_seed: 42
 #   - ["ctcf","gabpa"]
 #   - ["ctcf","runx1"]
 
-#FOR HELA
+# FOR HELA
 tf_pairs:
   - ["ell2", "aff4"]
   - ["e2f1", "phf8"]
