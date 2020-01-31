@@ -536,6 +536,38 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
 
 
+def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpath = None):
+    """
+    Peaks can sometimes be divided into two different 3200-long matrices,
+    meaning they get two scores, one for each rebuilt matrix.
+    This function will open a file in pandas, and merge them, by giving them
+    an anomaly score that is the mean of the two previous doublons
+
+    Since the coordinates of the peaks are based on the original data file, not
+    the matrix itself, merging is easier
+    """
+
+    # Default output path
+    if outputpath is None : outputpath = bedfilepath + "_merged_doublons.bed"
+
+    # If there was a header in the original file, we must ignore it, but also add it back to the output file
+    if ignore_first_line_header:
+
+        skiprows = 1
+
+        with open(bedfilepath) as if : header = if.readline()
+        with open(outputpath, 'a') as of : of.write(header)
+
+    else : skiprows = None
+
+    bed = pd.read_csv(bedfilepath, header = None, sep = '\t', skiprows = skiprows)
+
+    mergedbed = bed.groupby(by=[0,1,2,3]).agg({4:'mean'})
+
+
+    with open(outputpath, 'a') as of : # Open in append mode
+        mergedbed.to_csv(of, header=False, index=True, sep = '\t')
+
 
 
 
