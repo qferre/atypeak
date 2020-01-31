@@ -583,10 +583,13 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
 
 
 
-def normalize_result_file_intra_group_bias(result_file_path, scaling_factor_dict, cl_name, outfilepath = None):
+def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict, cl_name, outfilepath = None):
+    """
+    Given a dictionary of the form : {(dataset, tf ): k} where dataset and tf are strings, will apply the
+    k coefficient to each score of each peak of the corresponding combi
+    """
 
     # Write a normalized file
-    # WE NORMALIZE BY TF ONLY ! I keep the scores by dataset only for information !
     if outfilepath is None : outfilepath = result_file_path + "_normalized_intra_corr_group.bed" # Default file path
     normalized_rf = open(outfilepath,'w')
     # Header
@@ -601,9 +604,8 @@ def normalize_result_file_intra_group_bias(result_file_path, scaling_factor_dict
             dataset = line[3][0]; tf = line[3][1]
             score = float(line[4])
 
-             # Apply scaling factor
+            # Apply scaling factor
             new_score = score * scaling_factor_dict[(dataset, tf)]
-
 
             # Rejoin line and write it
             line[4] = str(new_score)
@@ -614,6 +616,36 @@ def normalize_result_file_intra_group_bias(result_file_path, scaling_factor_dict
 
     normalized_rf.close()
     rf.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

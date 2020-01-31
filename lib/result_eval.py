@@ -155,126 +155,294 @@ def produce_result_file(all_matrices, output_path, model,
 
 
 
-def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpath = None):
-    """
-    Peaks can sometimes be divided into two different 3200-long matrices,
-    meaning they get two scores, one for each rebuilt matrix.
-    This function will open a file in pandas, and merge them, by giving them
-    an anomaly score that is the mean of the two previous doublons
-
-    Since the coordinates of the peaks are based on the original data file, not
-    the matrix itself, merging is easier
-    """
-
-    if ignore_first_line_header: skiprows = 1
-    else : skiprows = None
-
-    bed = pd.read_csv(bedfilepath, header = None, sep = '\t', skiprows = skiprows)
-
-    mergedbed = bed.groupby(by=[0,1,2,3]).agg({4:'mean'})
-
-    # Default path
-    if outputpath is None : outputpath = bedfilepath + "_merged_doublons.bed"
-
-    mergedbed.to_csv(outputpath, header=False, index=True, sep = '\t')
 
 
 
 
 
-# ---- Corr group and biais correction
 
-def estimate_corr_group(model, all_datasets, all_tfs, crm_length=3200, squish_factor = 10):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
+# -------------- Corr group and biais correction/normalization --------------- #
+################################################################################
+
+def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list_of_many_crms, outfilepath, crm_length=3200, squish_factor = 10):
     """
     Estimates the corr group for each dataset+tf pair by looking at the added phantoms
 
     all_datasets and all_tfs are lists of names (eg. ['d01','d02'],['FOS','JUN'])
 
-    Returns a scaling factor to be applied compensating for intra-group biais
+    list_of_many_crms is a list of matrices given by er.get_some_crms()
+
+    We correct for intra-group biais (more abundant peak within a group get higher scores)
+    and inter-group biais (peaks get a perfect score of 1 when the group is completely full, not when it is as full as usual)
+    See code comments for details
+
+    Returns a dictionary of scaling factors to be applied compensating for model biais
+
+
     """
 
-    scaling_factor = dict()
+    coefs_norm = dict()
 
     # All possible combinations
     all_combis = list(itertools.product(all_datasets, all_tfs))
 
-    all_combis
-
-    for combi in all_combis:
-
-
-
-        #combi = (1,4)
 
 
 
 
+    # Take the average CRM 2d and repeat it across X axis
+    average_crm = np.mean(np.array(list_of_many_crms), axis=0)
+    #average_crm = pd.DataFrame(np.transpose(average_crm), index = all_tfs, columns = all_datasets)
+    average_crm_2d = np.mean(average_crm, axis = 0)
 
-        # Create an empty CRM
-        x = np.empty((crm_length,len(all_datasets),len(all_tfs)))
+    # # HELA debug combis
+    # all_combis = [
+    #     ('GSE40632','aff4'),
+    #     ('GSE40632','ell2'),
+    #     ('GSE45441','rcor1'),
+    #     ('GSE45441','sfmbt1'),
+    #     ('GSE22478','phf8'),
+    #     ('GSE22478','e2f1'),
+    #     ('GSE51633','brd4'),
+    #     ('GSE39263','znf143'),
+    #     ('GSE31417','znf143'),
+    #     ('GSE31417','yy1'),
+    #     ('GSE31417','gabpa'),
+    #     ('GSE44672','myc')
+    # ]
 
-        # Add a major peak for this particular dataset+tf pair across the entire region
-        # Use a value of 10 or 100 to force MSE to show groups ??
-        # No use 1 instead to prevent affine pbs
-        VALUE = 1
+
+
+
+    for combi in combis:
+
+
+
+        crumb=True
+        BEFORE_VALUE = 1 # Careful about affine effect. Write somewhere.
+
+        # Combi information
         curr_dataset = combi[0] # get id in list of the dataset
         curr_tf = combi[1] # get id in list of the tf
-
         # Convert dataset and tf to the approriate coordinates
         curr_dataset_id = all_datasets.index(curr_dataset)
         curr_tf_id = all_tfs.index(curr_tf)
 
-        x[:,curr_dataset_id, curr_tf_id] = VALUE
+
+
+        # INTRA AND OVERLAPPING GROUP NORMALISATION
+        # Build a full CRM. Assuming negative effects are negligible and that in biology more is always better
+        # See the maximum score reached by each : they should be "100%" (ie. perfect score, equal to BEFORE with crumbing), if more or less there is bias to be corrected
+        full_crm = (average_crm_2d>0).astype(int)
+        full_crm_3d = np.stack([full_crm]*320, axis=0).astype('float64')
+        full_crm_3d_crumbed = cp.look_here_stupid(full_crm_3d)
+        #utils.plot_3d_matrix(full_crm_3d_crumbed)
+        predictionf= model.predict(full_crm_3d_crumbed[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+        prediction_2df = np.mean(predictionf, axis=0) # 2D - mean along region axis
+        before_2df = np.mean(full_crm_3d_crumbed, axis=0)
+        #plt.figure(); sns.heatmap(np.transpose(before_2df), annot=True, fmt = '.3f')
+        #plt.figure(); sns.heatmap(np.transpose(prediction_2df), annot=True, fmt = '.3f')
+
+
+        # Get the weight
+        first_weight = 1/(prediction_2df[curr_dataset_id, curr_tf_id]/before_2df[curr_dataset_id, curr_tf_id])
 
 
 
+
+        # NOW INTER GROUP BIAS
+        # Put a peak only for this combi and look at the phantoms
+        # Here, we consider the group itself
+
+        x = np.zeros((crm_length,len(all_datasets),len(all_tfs))) # Create an empty CRM
+
+
+        # Add a major peak for this particular dataset+tf pair across the entire region
+        # Use a value of 10 or 100 to force MSE to show groups ??
+        # No use 1 instead to prevent affine pbs
+        x[:,curr_dataset_id, curr_tf_id] = BEFORE_VALUE
+        if crumb: # Add crumbing
+            x[:,:, curr_tf_id] += 0.1*BEFORE_VALUE
+            x[:,curr_dataset_id, :] += 0.1*BEFORE_VALUE
 
         xp = utils.squish(x, factor = squish_factor)
         xp2 = xp[np.newaxis, ..., np.newaxis]
-
         prediction = model.predict(xp2)[0,:,:,:,0]
-
-        # VERY IMPORTANT THAT HERE IT IS THE MEAN. TODO SAY SO IN PAPER !!!
-        prediction_2d = np.mean(prediction, axis=0) # 2D - mean along region axis
-
-        """
-        sns.heatmap(np.mean(xp, axis=0), annot = True)
-        sns.heatmap(prediction_2d, annot = True)
-        """
-
-        #result[(curr_dataset, curr_tf)] = np.copy(prediction_2d)
+        prediction_2d = np.mean(prediction, axis=0) # 2D - mean along region axis # VERY IMPORTANT THAT HERE IT IS THE MEAN. TODO SAY SO IN PAPER !!!
 
 
-        # Now compute the scaling factor somehow
-
-        # Simply VALUE/rebuilt_value ??
-        # no it's about the biais WITHIN the group so scaling factor should be
-        # 1 - (max_value_in_group - value_of_current_tfdatasetpair_in_group)/VALUE
-
-
-        # To prevent oddballs/outliers like watermark, this is instead the mean of top 3 values
-        # Should also drag down said outliers
-        TOP = 4
-        allvalues = np.ravel(prediction_2d)
-        top = allvalues[np.argsort(allvalues)[-TOP:]]
-        max_value_in_group = np.mean(top)
-        max_value_in_group
-        top
-
-        # CAREFUL ABOUT WHETHER IT IS TRANSPOSED OR NOT !!!!!!!!!!! IT APPEARS OKAY HERE WITH THIS FORMULA so probably remove this warning
-        value_of_current_tfdatasetpair_in_group = prediction_2d[curr_dataset, curr_tf]
-
-        value_of_current_tfdatasetpair_in_group
-
-        scaling_factor_current = (max_value_in_group / value_of_current_tfdatasetpair_in_group)/VALUE
-
-        scaling_factor_current
+        # APPLY THE FIRST WEIGHT and proceed as usual
+        prediction_2d = prediction_2d * first_weight
+        # Rq : since I normalize later, this is useless !!!!!
+        # Do it in final : final weight for this combi will be forst_weight * second_weight
 
 
 
-        scaling_factor[(curr_dataset, curr_tf)] = scaling_factor_current
 
-    return scaling_factor
+        # For ease of understanding, make the average CRM relative to highest abundance
+        relative_average_crm_2d = average_crm_2d/np.max(average_crm_2d)
+        #sns.heatmap(np.transpose(relative_average_crm_2d), annot=True, fmt = '.2f')
+
+        # Correlation groups reach a rebuilt value of 1 on each peak (hmm after normalizing intra group BE CAREFUL NOTE THIS SOMEWHERE ELSE) when complete, but we
+        # need to normalize this by "how complete are they typically"
+
+
+        # What would mark this combi as "complete" (value of 1) ?
+        #rebuilt_this = prediction_2d[curr_dataset_id, curr_tf_id]
+        #abundance_this = relative_average_crm_2d[curr_dataset_id, curr_tf_id]
+        #requested_group = prediction_2d*(BEFORE_VALUE/rebuilt_this)
+
+        # MODIFIED : instead I normalize the prediction to have a sum of 1
+        requested_group = prediction_2d/np.sum(prediction_2d)
+
+        #plt.figure(); sns.heatmap(np.transpose(requested_group), annot=True, cmap = 'Oranges')
+
+
+
+        #utils.plot_3d_matrix(prediction)
+        #utils.plot_3d_matrix(t[0,:,:,:,0])
+
+        # # Would it really result in 1 values if fed to the model ?
+        # t = model.predict((prediction/rebuilt_this)[np.newaxis,...,np.newaxis])
+        # pred_t = np.transpose(np.mean(t[0,:,:,:,0], axis=0))
+        # plt.figure(); sns.heatmap(pred_t, annot=True, cmap = 'Greys')
+        # # No it does not...
+
+
+        # Now
+
+
+        # How complete is it usually ?
+        clipped_request = np.clip(requested_group,0,np.inf) # Although it discards negative influences, we need to clip the request to calculate usual completeness
+
+        #sns.heatmap(np.transpose(prediction_2d), annot=True, cmap = 'Oranges')
+        #request_abundance_other_idea = relative_average_crm_2d/clipped_request
+
+        # To put it another way : how much abundance would that cost ?
+        request_abundance = relative_average_crm_2d*clipped_request
+
+        # Sum only finite
+        request_abundance_finite_values = request_abundance[np.isfinite(request_abundance)]
+        usual_completeness = np.sum(request_abundance_finite_values)
+
+        # Divide by this_abundance to get proportional completeness
+        # Or rather by max, since I want all the group ?
+        #second_weight = usual_completeness/abundance_this
+        second_weight = usual_completeness/np.max(request_abundance)
+
+
+        # Finally : final value
+        k = first_weight * second_weight
+        coefs_norm[combi] = k # Record it
+
+        # TODO PRINT THIS IN A FILE SOMEWHERE !!!
+        logcombifile = open(outfilepath,'w')
+        logcombifile.write(combi,'\t-->',"First weight =", first_weight)
+        logcombifile.write(combi,'\t-->',"Second weight =", second_weight)
+        logcombifile.write(combi,'\t-->','k =',k)
+        logcombifile.write('------')
+
+
+
+    # So in the end we have a dictionary of combinations.
+    # Normalize by the lowest k as otherwise we give 1000 to the "typical" behavior.
+    # Let's say we want to give 750 to typical behavior NOTE IN PAPER IMPORTANT FOR INTERPRETATION
+    # We want some margin for improvement : lowest k should bso insteaf of highest k, divide by 75 percent of lowest k
+
+    maxval = 1/0.75 * coefs_norm[min(coefs_norm, key=coefs_norm.get)]
+
+    coefs_norm_final = {k: v/maxval for k,v in coefs_norm.items()}
+    logcombifile.close()
+    return coefs_norm_final
+
+
+
+
+
+
+
+
+#
+#
+# def build_requested_group(model, curr_dataset_id, curr_tf_id,
+#                             nb_steps_gradient_ascent = 200, learning_rate = 0.1):
+#     """
+#     Tries to build a before matrix that would result in the current tf+dataset pair
+#     having a value of 1
+#     """
+#
+#     np.random.seed(42)  # for reproducibility
+#
+#     layer_input = model.layers[0].input
+#     layer_output = model.layers[-1].output
+#
+#
+#     # Loss function
+#     desired_value_along = K.ones(model.input_shape[1])
+#     loss = K.mean(-(layer_output[0,:,curr_dataset_id,curr_tf_id,0] - desired_value_along)**2) - K.mean(layer_output) # Regularize by sum of output
+#
+#     grads = K.gradients(loss, layer_input)[0]   # Compute gradient
+#     grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5) # Normalization trick
+#     iterate = K.function([layer_input, K.learning_phase()], [loss, grads])
+#
+#     # we start from a gray image with some random noise
+#     input_data = np.random.uniform(0, 1, (1,) + model.input_shape[1:])
+#
+#     # Run gradient ascent for n steps
+#     for i in range(nb_steps_gradient_ascent):
+#         loss_value, grads_value = iterate([input_data, 0])
+#         input_data += grads_value * learning_rate
+#
+#
+#     return input_data[0,:,:,:,0], loss_value,
+#
+#
+# request, loss = build_requested_group(model, curr_dataset_id=6, curr_tf_id=9,
+#     nb_steps_gradient_ascent = 100, learning_rate = 0.1)
+# print(loss)
+# sns.heatmap(np.transpose(np.mean(request, axis=0)), annot = True)
+#
+# """
+# GRADIENT PROJECTION and maybe blurring TO PREVENT THIS KIND OF THING
+# """
+#
+# np.mean(request[:,6,9])
+#
+# p = model.predict(request[np.newaxis,...,np.newaxis])
+# sns.heatmap(np.transpose(np.mean(p[0,:,:,:,0], axis=0)), annot = True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -960,7 +1128,7 @@ def crm_diag_plots(list_of_many_crms, datasets, cl_tfs):
     average_crm = pd.DataFrame(np.transpose(average_crm), index = cl_tfs, columns = datasets)
     mypalette = sns.cubehelix_palette(256) ; mypalette[0] = [1,1,1]
     average_crm_fig, ax = plt.subplots(figsize=(8,8))
-    sns.heatmap(average_crm, ax=ax, cmap=mypalette)
+    sns.heatmap(average_crm, ax=ax, cmap=mypalette, annot = True)
 
     # For TFs : sum many_crms along the TF axis, then do a correlation matrix.
     plt.figure()
