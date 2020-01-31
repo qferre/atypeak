@@ -24,7 +24,7 @@ import keras.backend as K
 
 
 ## Custom libraries
-import lib.model_atypeak as cp    # Autoencoder functions
+import lib.model_atypeak as cp      # Autoencoder functions
 import lib.data_read as dr          # Process data produced by Makefile
 import lib.artificial_data as ad    # Trivial data for control
 import lib.result_eval as er        # Result production and evaluation
@@ -65,9 +65,7 @@ datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets]
 datasets_clean = sorted(list(set(datasets_clean_ori)), key=datasets_clean_ori.index) # Make unique while preserving order, which a `set` would not do
 print('Parameters loaded.')
 
-cl_tfs
 
-datasets
 
 """
 # TODO Compute weights for the loss : based on the `crmtf_dict` object and also on the `datapermatrix` and `peaks_per_dataset` objects, we know
@@ -259,10 +257,13 @@ def train_model(model,parametrs):
             steps_per_epoch = parameters["nn_batches_per_epoch"],
             epochs = parameters["nn_number_of_epochs"],
             callbacks = [es, es2],
-            max_queue_size = 1) # Model is quite complex with large data, so max queue size of 1 to prevent memory leak
-            # TODO  : no model is not 'quite complex with large data' just say the queue size helps
+            max_queue_size = 1) # Max queue size of 1 to prevent memory leak
         end = time.time()
-        print('Training completed in '+str(end-start)+' s')
+
+
+
+        total_time = end-start
+        print('Training of the model completed in '+str(total_time)+' seconds.')
 
         # Save trained model
         if not parameters['use_artificial_data'] :
@@ -294,9 +295,202 @@ model = train_model(model, parameters)
 
 
 
+
 ################################################################################
 ################################# DIAGNOSTIC ###################################
 ################################################################################
+
+
+
+# Get some CRMs (like, 200*48 or something)
+# This is used MANY times in the code, for q-score, many diagnostics, abundane, normalization, etc.
+list_of_many_crms = er.get_some_crms(train_generator, nb_of_batches_to_generate = 200)
+
+# TODO MUST MAKE nb_of_batches_to_generate a PARAMETER !!!!!!!
+#nb_of_batches_to_generate = parameters['nb_batches_generator_for_ref_list_of_many_crms']
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
+#
+# average_crm = np.mean(np.array(list_of_many_crms), axis=0)
+# average_crm.shape
+#
+# import importlib
+# importlib.reload(er)
+#
+# scaling_factor_dict = er.estimate_corr_group(model = model, all_datasets = datasets, all_tfs = cl_tfs,
+#         crm_length=parameters['pad_to'], squish_factor=parameters["squish_factor"],
+#         list_of_many_crms=list_of_many_crms)
+#
+#
+#
+#     # Take the average CRM 2d and repeat it across X axis
+#     average_crm = np.mean(np.array(list_of_many_crms), axis=0)
+#     average_crm_2d = np.mean(average_crm, axis = 0)
+#
+#     import seaborn as sns
+#     sns.heatmap(average_crm_2d)
+#
+#     utils.plot_3d_matrix(average_crm)
+#
+#     average_crm_df_for_some_reason = pd.DataFrame(np.transpose(average_crm_2d), index = cl_tfs, columns = datasets)
+#
+#     sns.heatmap(average_crm_df_for_some_reason, annot = True)
+#
+#     average_crm
+#
+#     #sns.heatmap(np.transpose(average_crm_2d), annot = True, cmap = 'Blues')
+#
+#     k=np.ones((320,len(datasets),len(cl_tfs)))
+#     #tpr = np.repeat(k, 3, axis=1)
+#
+#     pr = model.predict(1*average_crm[np.newaxis,...,np.newaxis])
+#
+#     pr = model.predict(1*k[np.newaxis,...,np.newaxis])
+#
+#     # # sl = np.array(list_of_many_crms)
+#     # # sl.shape
+#     # m = np.sum(np.sum(np.sum(sl, axis = -1), axis=-1), axis=-1)
+#     # # m.shape
+#     # np.mean(m)
+#     # np.sum(average_crm[np.newaxis,...,np.newaxis])
+#     # np.sum(pr)
+#     # # np.mean(average_crm_2d)
+#
+#     pr2 = np.mean(pr[0,:,:,:,0], axis=0)
+#     sns.heatmap(np.transpose(pr2), annot = True, cmap = 'Reds')
+#
+#         sns.heatmap(np.transpose(pr2), annot = True, cmap = 'Oranges')
+#
+#
+#     ratio = (pr2/average_crm_2d) # Use sqrt because it's mean SQUAreD ? sure why not. TODO JUSTFY
+#     #sns.heatmap(np.transpose(second_ratio), annot = True, cmap = 'Greens')
+#
+#
+#     sns.heatmap(np.transpose(ratio), annot = True, cmap = 'Greens')
+#
+#     m = ratio[np.isfinite(ratio)].min()
+#     sns.heatmap(np.transpose(ratio)/m, annot = True, cmap = 'Reds')
+#
+#
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Figure size. TODO make this a parameter ?
 eval_figsize_small = (5,5)
@@ -326,32 +520,32 @@ if parameters['perform_model_diagnosis']:
 
         for ID in range(len(before_batch)):
 
-
-
-            #
-            ID = 2
-
             before_batch = next(train_generator)[0]
 
-
+            #
+            ID = 8
 
             before_raw = np.copy(before_batch[ID,:,:,:,0])
 
             # before_raw[:,5:,:]=0   # REMOVE WATERMAR FOR TEST
             # before_raw[:,:,5:]=0   # REMOVE WATERMAR FOR TEST
             # before_raw[:,:3,:]=0   # REMOVE WATERMAR FOR TEST
-            #before_raw[:,:,:4]=0   # REMOVE WATERMAR FOR TEST
-            #before_raw[:,:,3:]=0   # REMOVE WATERMAR FOR TEST
 
             before = np.around(before_raw-0.11) # Remove crumbing if applicable
             prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
 
-
-            # 2D - mean along region axis
+            # 2D - mean NO IT IS MAX along region axis
             before_2d = np.max(before, axis=0)
             plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
             prediction_2d = np.max(prediction, axis=0)
             plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
+
+            utils.plot_3d_matrix(before_raw)
+
+
+
+
+
 
             #plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
             # # FLIPPED
@@ -405,6 +599,11 @@ if parameters['perform_model_diagnosis']:
 
     # TODO : MAKE THAT A PARAMETER !
     # Should still be high to compensate for batch effects ! careful about interpretation !
+
+
+    """
+    STOP ! USE list_of_many_crms DIRECTLY INSTEAD OF SUMMED_BEFORES !!!!!!!
+    """
     for i in range(300):
 
         before_batch = next(train_generator)[0]
@@ -494,6 +693,13 @@ if parameters['perform_model_diagnosis']:
 
     q, qscore_plot, corr_plot, posvar_x_res_plot = er.calculate_q_score(model, train_generator,
         nb_of_batches_to_generate = 200)
+    """
+    IMPORTANT TODO : I should directly pass a list_of_many_crms precalculated. Because I use it in many parts of the code.
+    """
+
+
+
+
     # Final q-score (total sum)
     print("-- Total Q-score of the model (lower is better) : "+ str(np.sum(np.sum(q))))
 
@@ -706,18 +912,30 @@ else:
 
     # Only do this on true data of course
     if parameters['use_artificial_data'] :
-        raise ValueError("Error : process_full_real_data was set to True, but use_artificial_data is also True")
+        raise ValueError("Error : process_full_real_data was set to True, but use_artificial_data is also True.")
     else:
         print("Writing result BED file for peaks, with anomaly score.")
         print("This can be long (roughly 1 second for 10 CRMs with reasonably-sized queries, like 15 datasets x 15 TFs).")
         print("On big queries (like 25*50) it can be 1 second per CRM.")
 
+
+        # Filepaths
+        root_output_bed_path = root_path + '/data/output/bed/' + parameters['cell_line']
+        output_bed_path = root_output_bed_path + ".bed"
+        output_bed_path_normalized_poub = root_output_bed_path + "_raw_normalized_by_tf_DEBUG.bed"
+        output_bed_merged = root_output_bed_path + "_merged_doublons.bed"
+        output_path_corr_group_normalized = root_output_bed_path + "_merged_doublons_normalized_corr_group.bed"
+        output_bed_path_final = root_output_bed_path + "_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
+
+
+        ### Raw file production
+
         # Produce a raw, non-normalized file for this cell line
-        output_bed_path = root_path+'/data/output/bed/'+parameters['cell_line']+'.bed'
         print('Producing bed file : '+output_bed_path)
         er.produce_result_file(all_matrices, output_bed_path, model, get_matrix, parameters, datasets_clean, cl_tfs)
 
-        er.print_merge_doublons(output_bed_path) # Put mean score for doublons
+        # Put mean score for doublons
+        utils.print_merge_doublons(bedfilepath = output_bed_path, outputpath = output_bed_merged)
 
 
         """
@@ -734,25 +952,44 @@ else:
 
 
 
-        # ---- Normalization ----
+        # --------- Normalization ----------
 
 
-        ### First normalize intra group
-
-        # Estimate intra group scaling factors
-        scaling_factor_dict = er.estimate_corr_group(model, all_datasets, all_tfs, crm_length=parameters['pad_to'], squish_factor =parameters["squish_factor"])
-
-
-        output_path_intra_corr_group_normalized = output_bed_path + "_normalized_intra_corr_group.bed"
-        utils.normalize_result_file_intra_group_bias(output_bed_path, scaling_factor_dict, cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized)
+        # For reference, get the scores per tf and per dataset for the RAW data, before normalization
+        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_merged,
+            cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub)
 
 
-        ### Then Normalize the score by TF, to try to counter the frequency problem problem
-        output_bed_path_normalized = output_path_intra_corr_group_normalized + "_normalized_by_tf.bed"
-        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_path, cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized)
 
 
-        #er.print_merge_doublons(output_bed_path_normalized) # Put mean score for doublons
+
+        """
+        CAREFUL, AT TIME OF WRITING THIS I OVERWRITE scores_by_tf_df AND scores_by_dataset_df LATER. DECIDE WHICH ONE TO OUTPUT.
+        """
+
+
+
+
+
+
+        ### First normalize by corr group
+
+        # Estimate corr group scaling factors
+        corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(model = model,
+            all_datasets = datasets, all_tfs = cl_tfs,
+            crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
+            outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.txt")
+
+        utils.normalize_result_file_with_coefs_dict(output_bed_merged, corr_group_scaling_factor_dict,
+            cl_name = parameters['cell_line'], outfilepath = output_path_corr_group_normalized)
+
+
+        ### Then Normalize the score by TF,
+
+        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_path_corr_group_normalized,
+            cl_name = parameters['cell_line'], outfilepath = output_bed_path_corr_group_and_tf_normalized)
+
+
 
         # A new result file labeled _normalized has been produced.
         print('Processing complete.')
@@ -819,7 +1056,7 @@ else:
 
             # TODO : THOSE ARE MAYBE ALREADY CALCULATED BY THE Q-SCORE. MERGE THIS CODE WITH THE Q-SCORE CODE TO AVOID REDUNDANCIES ?
 
-            list_of_many_crms = er.get_some_crms(train_generator)
+
 
 
             average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
@@ -861,13 +1098,6 @@ else:
 
 
 
-
-
-
-
-
-
-
             average_crm_fig.savefig(plot_output_path+'average_crm.pdf')
             tf_corr_fig.savefig(plot_output_path+'tf_corr.pdf')
             dataset_corr_fig.savefig(plot_output_path+'dataset_corr.pdf')
@@ -885,6 +1115,10 @@ else:
 
             # TODO the CRM file path should be a parameter in the YAML, it is hardcoded for now
             CRM_FILE = './data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed'
+
+
+
+
             score_distrib, avg_score_crm, max_score_crm = er.plot_score_per_crm_density(output_bed_path, CRM_FILE)
 
             score_distrib.save(plot_output_path+'score_distribution.pdf')
@@ -895,8 +1129,7 @@ else:
 
             # REDO THIS ON NORMALIZED FILE
             print("... in the normalized file ...")
-            output_tfnorm_file = output_bed_path+'_normalized_by_tf.bed'
-            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_tfnorm_file, CRM_FILE)
+            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_normalized, CRM_FILE)
             score_distrib_tfnorm.save(plot_output_path+'score_distribution_TFNORM.pdf')
             avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_TFNORM.pdf')
             max_score_crm_tfnorm.save(plot_output_path+'max_score_per_crm_density_TFNORM.pdf')
@@ -916,8 +1149,6 @@ else:
 
 
 
-
-            atypeak_result_file_normalized = output_bed_path + "_normalized_by_tf.bed"
             crm_file_path = "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
             # TODO UNHARDCODE THE CRM FILE PATH OF AT LEAST PUT IT AT THE BEGINNING !!!!!
 
@@ -929,7 +1160,7 @@ else:
                 try:
                     # TODO CAREFUL ABOUT CASE !!
                     tf1, tf2 = pair
-                    p, _ = er.get_scores_whether_copresent(tf1, tf2, atypeak_result_file_normalized, crm_file_path)
+                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_normalized, CRM_FILE)
                     p.save(plot_output_path+"tfdiag_"+tf1+"_"+tf2+".pdf")
                 except:
                     print("Error fetching the pair : "+str(pair))
