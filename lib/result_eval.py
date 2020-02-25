@@ -10,13 +10,13 @@ import time
 import functools
 import itertools
 
-
 import pybedtools
 import numpy as np
 import pandas as pd
 from plotnine import *
 
 import lib.artificial_data as ad
+import lib.model_atypeak as cp
 from lib import utils
 
 
@@ -30,9 +30,7 @@ def anomaly(before, prediction):
     Anomaly score between a true (`before`) and predicted (`prediction`) CRMs.
     Both argument should be 3d NumPy arrays.
 
-
     WARNING : May be a misnomer, as a score of 1 means "good", not "anomalous !"
-
 
     Note : this is all designed to work with scores, but for now the peaks all have scores of 1 when present.
     """
@@ -144,12 +142,12 @@ def produce_result_file(all_matrices, output_path, model,
         cnt += 1
 
 
-    print("Writing result file...")
+
     for line in result :
         rf.write(line+'\n')
 
     rf.close()
-    print("BED file completed.")
+    print(" -- Done.")
 
 
 
@@ -232,11 +230,11 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 
 
 
-    for combi in combis:
+    for combi in all_combis:
 
 
 
-        crumb=True
+        crumb=True # TODO MAKE IT A PARAMETER
         BEFORE_VALUE = 1 # Careful about affine effect. Write somewhere.
 
         # Combi information
@@ -248,7 +246,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 
 
 
-        # INTRA AND OVERLAPPING GROUP NORMALISATION
+        # --------------------------  INTRA AND OVERLAPPING GROUP NORMALISATION
         # Build a full CRM. Assuming negative effects are negligible and that in biology more is always better
         # See the maximum score reached by each : they should be "100%" (ie. perfect score, equal to BEFORE with crumbing), if more or less there is bias to be corrected
         full_crm = (average_crm_2d>0).astype(int)
@@ -268,7 +266,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 
 
 
-        # NOW INTER GROUP BIAS
+        # -------------------------- NOW INTER GROUP BIAS
         # Put a peak only for this combi and look at the phantoms
         # Here, we consider the group itself
 
@@ -280,8 +278,9 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
         # No use 1 instead to prevent affine pbs
         x[:,curr_dataset_id, curr_tf_id] = BEFORE_VALUE
         if crumb: # Add crumbing
-            x[:,:, curr_tf_id] += 0.1*BEFORE_VALUE
-            x[:,curr_dataset_id, :] += 0.1*BEFORE_VALUE
+            x = cp.look_here_stupid(x)
+            #x[:,:, curr_tf_id] += 0.1*BEFORE_VALUE
+            #x[:,curr_dataset_id, :] += 0.1*BEFORE_VALUE
 
         xp = utils.squish(x, factor = squish_factor)
         xp2 = xp[np.newaxis, ..., np.newaxis]
@@ -354,11 +353,11 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
         coefs_norm[combi] = k # Record it
 
         # TODO PRINT THIS IN A FILE SOMEWHERE !!!
-        logcombifile = open(outfilepath,'w')
-        logcombifile.write(combi,'\t-->',"First weight =", first_weight)
-        logcombifile.write(combi,'\t-->',"Second weight =", second_weight)
-        logcombifile.write(combi,'\t-->','k =',k)
-        logcombifile.write('------')
+        logcombifile = open(outfilepath,'a')
+        logcombifile.write(str(combi)+'\t--> '+"First weight = " + str(first_weight)+'\n')
+        logcombifile.write(str(combi)+'\t--> '+"Second weight = " + str(second_weight)+'\n')
+        logcombifile.write(str(combi)+'\t--> '+"k = " + str(k)+'\n')
+        logcombifile.write('------'+'\n')
 
 
 
@@ -371,6 +370,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 
     coefs_norm_final = {k: v/maxval for k,v in coefs_norm.items()}
     logcombifile.close()
+
     return coefs_norm_final
 
 

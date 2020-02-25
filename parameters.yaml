@@ -2,6 +2,7 @@
 # Results are done by cell line and will go in the appropriate directory.
 cell_line: "hela"
 
+#
 
 # ---------------------------- Execution ------------------------------------- #
 
@@ -44,7 +45,7 @@ pad_to: 3200 # Must be equal to the "pad_to" parameter in the Makefile !
 crumb: 0.1
 squish_factor: 10
 
-## Other training paramters Training
+## Other training paramters
 nn_batch_size: 48
 nn_optimizer: "adam"
 
@@ -61,22 +62,28 @@ nn_early_stop_loss_absolute: 0 # Will stop training once this threshold of loss 
 
 
 ## Other architecture parameters Architecture
-#autoencoder_parameters:
 nn_kernel_width_in_basepairs: 20 # Should be kept small, use squishing instead
 nn_reg_coef_filter: 0.0025
 nn_pooling_factor: 2
 
+# Weighting
+# Should be a list containing as many elements as the relevant dimension. Gives their respective weights (sorted alphabetically)
+# eg. tf_weights = [1,1,2,2]
+# if `null`, default weight of 1 is used.
+tf_weights: null
+datasets_weights: null
 
 # ---------------------------- Diagnostic ------------------------------------ #
 
 
 ###### Artificial data parameters
+artificial_tfgroup_split: 0.666
+artificial_overlapping_groups: False
+
 artificial_nb_datasets: 8
 artificial_nb_tfs: 8
 artificial_ones_only: True
 artificial_watermark_prob: 0.75
-artificial_tfgroup_split: 0.666
-artificial_overlapping_groups: False
 
 # Core parameter : used all across the program, including in training !
 random_seed: 42
@@ -99,6 +106,7 @@ tf_pairs:
   - ["znf143", "rcor1"]
   - ["ell2", "phf8"]
   - ["ell2", "brd4"]
+  - ["sfmbt1", "rcor1"]
 
 # FOR K562:
 # tf_pairs:

@@ -536,6 +536,11 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
 
 
+
+
+
+
+
 def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpath = None):
     """
     Peaks can sometimes be divided into two different 3200-long matrices,
@@ -555,14 +560,17 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
 
         skiprows = 1
 
-        with open(bedfilepath) as if : header = if.readline()
+        with open(bedfilepath) as inf : header = inf.readline()
         with open(outputpath, 'a') as of : of.write(header)
 
     else : skiprows = None
 
     bed = pd.read_csv(bedfilepath, header = None, sep = '\t', skiprows = skiprows)
 
-    mergedbed = bed.groupby(by=[0,1,2,3]).agg({4:'mean'})
+    # Take rounded mean for the same peaks that have two lines
+    def rounded_mean(x): return np.round(np.mean(x))
+    def keep_only_first(series): return series.iloc[0]
+    mergedbed = bed.groupby(by=[0,1,2,3]).agg({4: rounded_mean, 5: keep_only_first})
 
 
     with open(outputpath, 'a') as of : # Open in append mode
@@ -590,10 +598,10 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict,
     """
 
     # Write a normalized file
-    if outfilepath is None : outfilepath = result_file_path + "_normalized_intra_corr_group.bed" # Default file path
+    if outfilepath is None : outfilepath = result_file_path + "_normalized_corr_group.bed" # Default file path
     normalized_rf = open(outfilepath,'w')
     # Header
-    normalized_rf.write('track name ='+cl_name+'_corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized intra correlation group" useScore=1'+'\n')
+    normalized_rf.write('track name ='+cl_name+'_corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by correlation group" useScore=1'+'\n')
 
 
     rf = open(result_file_path,'r')
@@ -606,6 +614,9 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict,
 
             # Apply scaling factor
             new_score = score * scaling_factor_dict[(dataset, tf)]
+
+            # Round as integer
+            new_score = int(np.around(new_score))
 
             # Rejoin line and write it
             line[4] = str(new_score)
