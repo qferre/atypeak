@@ -325,165 +325,69 @@ list_of_many_crms = er.get_some_crms(train_generator, nb_of_batches_to_generate 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
-#
-# average_crm = np.mean(np.array(list_of_many_crms), axis=0)
-# average_crm.shape
-#
-# import importlib
-# importlib.reload(er)
-#
-# scaling_factor_dict = er.estimate_corr_group(model = model, all_datasets = datasets, all_tfs = cl_tfs,
-#         crm_length=parameters['pad_to'], squish_factor=parameters["squish_factor"],
-#         list_of_many_crms=list_of_many_crms)
-#
-#
-#
-#     # Take the average CRM 2d and repeat it across X axis
-#     average_crm = np.mean(np.array(list_of_many_crms), axis=0)
-#     average_crm_2d = np.mean(average_crm, axis = 0)
-#
-#     import seaborn as sns
-#     sns.heatmap(average_crm_2d)
-#
-#     utils.plot_3d_matrix(average_crm)
-#
-#     average_crm_df_for_some_reason = pd.DataFrame(np.transpose(average_crm_2d), index = cl_tfs, columns = datasets)
-#
-#     sns.heatmap(average_crm_df_for_some_reason, annot = True)
-#
-#     average_crm
-#
-#     #sns.heatmap(np.transpose(average_crm_2d), annot = True, cmap = 'Blues')
-#
-#     k=np.ones((320,len(datasets),len(cl_tfs)))
-#     #tpr = np.repeat(k, 3, axis=1)
-#
-#     pr = model.predict(1*average_crm[np.newaxis,...,np.newaxis])
-#
-#     pr = model.predict(1*k[np.newaxis,...,np.newaxis])
-#
-#     # # sl = np.array(list_of_many_crms)
-#     # # sl.shape
-#     # m = np.sum(np.sum(np.sum(sl, axis = -1), axis=-1), axis=-1)
-#     # # m.shape
-#     # np.mean(m)
-#     # np.sum(average_crm[np.newaxis,...,np.newaxis])
-#     # np.sum(pr)
-#     # # np.mean(average_crm_2d)
-#
-#     pr2 = np.mean(pr[0,:,:,:,0], axis=0)
-#     sns.heatmap(np.transpose(pr2), annot = True, cmap = 'Reds')
-#
-#         sns.heatmap(np.transpose(pr2), annot = True, cmap = 'Oranges')
-#
-#
-#     ratio = (pr2/average_crm_2d) # Use sqrt because it's mean SQUAreD ? sure why not. TODO JUSTFY
-#     #sns.heatmap(np.transpose(second_ratio), annot = True, cmap = 'Greens')
-#
-#
-#     sns.heatmap(np.transpose(ratio), annot = True, cmap = 'Greens')
-#
-#     m = ratio[np.isfinite(ratio)].min()
-#     sns.heatmap(np.transpose(ratio)/m, annot = True, cmap = 'Reds')
-#
-#
-#
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # HELA debug combis
+    all_combis = [
+        ('GSE40632','aff4'),
+        ('GSE40632','ell2'),
+        ('GSE45441','rcor1'),
+        ('GSE45441','sfmbt1'),
+        ('GSE22478','phf8'),
+        ('GSE22478','e2f1'),
+        ('GSE51633','brd4'),
+        ('GSE39263','znf143'),
+        ('GSE31417','znf143'),
+        ('GSE31417','yy1'),
+        ('GSE31417','gabpa'),
+        ('GSE44672','myc')
+    ]
+
+
+
+    combi = ('GSE22478','phf8')
+
+
+
+    # Try an impossible combi and see !
+    combi = ('GSE20303', 'nr2c2')
+
+    """
+    OKAY THE NONSENSICAL ONES MUST BE DUE TO CRUMBING
+    """
+
+"""
+Keep this somewhere and do some plots with it like I do in the paper !!!!!!!!
+Keep it in result_eval and do some plots !!
+Add some comments of course to explain all that code
+"""
+def estimate_corr_group_for_combi(dataset_name, tf_name,
+                                    all_datasets, all_tfs, model,
+                                    before_value = 1):
+
+
+    curr_dataset = combi[0] # get id in list of the dataset
+    curr_tf = combi[1] # get id in list of the tf
+    curr_dataset_id = datasets.index(curr_dataset)
+    curr_tf_id = cl_tfs.index(curr_tf)
+
+    # Create an empty CRM with a peak only for this combi
+    x = np.zeros((crm_length,len(all_datasets),len(all_tfs)))
+    x[:,curr_dataset_id, curr_tf_id] = before_value
+    x[:,:, curr_tf_id] += 0.1*before_value
+    x[:,curr_dataset_id, :] += 0.1*before_value
+
+    # See what the model rebuilds
+    xp = utils.squish(x, factor = squish_factor)
+    xp2 = xp[np.newaxis, ..., np.newaxis]
+    prediction = model.predict(xp2)[0,:,:,:,0]
+    prediction_2d = np.mean(prediction, axis=0) #
+
+
+    #sns.heatmap(np.mean(x, axis=0).transpose())
+
+    # The plot we want
+    plt.figure(figsize = (6,5)); sns.heatmap(np.transpose(prediction_2d),
+        annot=True, cmap = 'Greens',
+        xticklabels = all_datasets, yticklabels = all_tfs, fmt = '.2f')
 
 
 
