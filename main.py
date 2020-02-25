@@ -270,18 +270,21 @@ def train_model(model,parametrs):
         total_time = end-start
         print('Training of the model completed in '+str(total_time)+' seconds.')
 
-        # Save trained model
+
+
+        # Save trained model and save the loss as text
         if not parameters['use_artificial_data'] :
-            model.save(root_path+"/data/output/model/trained_model_"+parameters['cell_line']+'.h5')
+            save_model_path = root_path+"/data/output/model/trained_model_"+parameters['cell_line']
         else:
-            model.save(root_path+"/data/output/model/trained_model_ARTIFICIAL.h5")
+            save_model_path = root_path+"/data/output/model/trained_model_ARTIFICIAL"
+        loss_history = model.history.history["loss"]
+        model.save(save_model_path+'.h5')
+        np.savetxt(save_model_path+"_loss_history.txt", np.array(loss_history), delimiter=",")
         print('Model saved.')
 
 
-        # Save the loss as text
-        loss_history = model.history.history["loss"]
-        np.savetxt(root_path+"/data/output/model/"+"trained_model_"+parameters['cell_line']+"_loss_history.txt",
-            np.array(loss_history), delimiter=",")
+
+
 
     return model
 
