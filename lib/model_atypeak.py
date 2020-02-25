@@ -301,9 +301,14 @@ def create_weighted_mse(datasets_weights, tf_weights):
 
     # TODO : must separate pos and neg for additional weighting (loss due to added phantoms and loss due to removed peaks)
 
+    # TODO : to use a 2d matrix of weights instead with one specific weight per series (TF+dataset pair), simply do
+    # something like this :
+    # raw_mse = np.ones((10000,3,4)) # The data
+    # w = np.array([[1,1,1,2],[2,2,2,1],[1,1,2,2]]) # the weights. IMPORTANT : shape is (nb_datasets, nb_tfs)
+    # result = raw_mse * w # Perform the multiplication in that order !
+    # utils.plot_3d_matrix(result) # Check that it worked
+
     return weighted_loss # Return the function so you can use it in the encoder
-
-
 
 
 

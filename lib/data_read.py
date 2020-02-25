@@ -6,26 +6,6 @@ import numpy as np
 import scipy.sparse as sp
 
 
-# -------------------------- Miscellaneous utility fct. ---------------------- #
-
-def dataset_parent_name(name):
-    # To avoid sparsity, we must not split datasets by TF, which would make some
-    # lines always empty, but not always the same (depending on the TF)
-
-
-    # TODO replace this by a dict, on how to group the datasets.
-    # This dict must be a short text file (so I can read it here quickly and it
-    # can be shown in the github).
-    return name
-
-
-
-
-
-
-
-
-
 # -------------------------- Preparation per cell line ----------------------- #
 
 def prepare(cell_line, root_path):
@@ -119,7 +99,7 @@ def prepare(cell_line, root_path):
 
 # ---------------------------- Matrix processing ----------------------------- #
 
-def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max):
+def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, use_scores = False):
     """
     This takes a datafile as read by extract_matrix and turns it into a matrix
     representing the presence or absence of a peak :
@@ -160,37 +140,20 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max):
 
 
 
-
-
-
-
-        """
-        # TODO Get score or bigwig profile if applicable
-        # Jeanne mentioned peak summit, so maybe we can have
-        # good_score_peak = 10 * score_peak, and like Denis said
-        # for a 200 bp window apply this max_score regardless !
-        #score_peak = line[7] # Just need to un-comment this line, as score_peak is already treated later.
-        #peak_summit = line[8] # Uncomment this line and DO SOMETHING WITH IT in the vector writing, it does nothing for now.
-
-        # TODO careful I think the score is in minuslog10 so we may have
-        # to do -1*score or something
-
-        # TODO Careful, we must normalize ! Values must be between 0 and 1 !
-        #Check the maximum score and divide by it
-
-        """
-
-        score_peak = 1
-
+        # TODO Get score or bigwig profile if applicable, or at least get peak summit, which is present in ReMap data
+        if use_scores:
+            score_peak = line[7]
+            peak_summit = line[8]
+            # TODO do something with peak summit
+        # Currently all peaks are read as 1
+        else:
+            score_peak = 1
 
 
 
         # Get endpos and startpos
         startpos_peak = int(line[5])
         endpos_peak = int(line[6])
-
-
-
 
 
         # Increase startpos if lower than min, decrease endpos if lower than max
@@ -202,20 +165,13 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max):
         X[line_of_matrix,startpos_peak-crm_min:endpos_peak-crm_min] = wvec
 
 
-        """
         # Same for peak_summit and max_score
-        # peak_summit = int(line[666])
         # peak_max_begin = peak_summit - 100
         # peak_max_end = peak_summit + 100
         # if peak_max_begin < crm_min : startpos_peak = crm_min
         # if peak_max_end > crm_max : endpos_peak = crm_max
         # wvecmax = np.repeat(score_peak_max,peak_max_end-peak_max_begin)
         # X[line_of_matrix,peak_max_begin-crm_min:peak_max_end-crm_min] = wvecmax
-        """
-
-
-
-
 
 
     # Return the result
@@ -251,7 +207,6 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
 
     matrices = list() # List of matrices (one per TF)
 
-
     all_lines = list() # Collect all lines.
 
     # For each transcription factor...
@@ -259,9 +214,7 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
 
         # --------------------- Build 2D matrix for this TF ------------------ #
 
-
-
-        # TODO : if the couple (crm_id,tf) does not exist (because this CRM
+        # If the couple (crm_id,tf) does not exist (because this CRM
         # has no peaks for this TF) return an empty matrix !
         if (crm_id, tf) not in cl_crm_tf_dict :
             cleaned_names_ori = [dataset_parent_name(n) for n in cl_datasets]
@@ -275,8 +228,6 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
             # First, query the correct lines in the large data file and build the BED
             lines = cl_crm_tf_dict[(crm_id,tf)]
             lines = [int(x) for x in lines]
-
-
 
             # sorted_intersect.txt has been split into chunks of 100k. For each line to fetch,
             # get the correct file and the correct line number in the file.
@@ -306,7 +257,5 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
     if return_data_lines : return (result, all_lines, crm_min)
     else : return result
 
-
-
-    # TODO DONE concatenate all the subfiles as they are generated and return them if asked
+    # We will then concatenate all the subfiles as they are generated and return them if asked
     # (ie. if extract matrix is used by itself during denoising, not by the generator)
