@@ -60,9 +60,9 @@ get_matrix = partial(dr.extract_matrix,
     cl_datasets = datasets, crm_coordinates = crmid,
     datapath = root_path+'/data/input/sorted_intersect/')
 
-# Datasets : remember to use the parent name
-datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets]
-datasets_clean = sorted(list(set(datasets_clean_ori)), key=datasets_clean_ori.index) # Make unique while preserving order, which a `set` would not do
+# TODO Datasets : might wish to use a parent name later
+#datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets]
+datasets_clean = sorted(list(set(datasets)), key=datasets.index) # Make unique while preserving order, which a `set` would not do
 print('Parameters loaded.')
 
 
@@ -150,22 +150,27 @@ def prepare_model_with_parameters(parameters):
 
 
     # Compute weights for loss
-    # TODO Make those parametrable
-    tf_weights = [1] * nb_tfs_model
-    datasets_weights = [1] * nb_datasets_model
+    tf_weights = parameters["tf_weights"]
+    datasets_weights = parameters["datasets_weights"]
+    # Treat default
+    if tf_weights is None: tf_weights = [1] * nb_tfs_model
+    if datasets_weights is None: datasets_weights = [1] * nb_datasets_model
     weighted_mse = cp.create_weighted_mse(datasets_weights, tf_weights)
-
-    # TODO : make a 2d matrix of weights instead, one weight for each specific tf+dataset pair
-
+    # TODO : make a 2d matrix of weights instead, one weight for each specific tf+dataset pair. See draft code in the function source.
 
 
-    # Finally, create the model
+
+    # Finally, create the atypeak model
     model = cp.create_model_atypeak_model(
-        kernel_nb=parameters["nn_kernel_nb"], kernel_width_in_basepairs=parameters["nn_kernel_width_in_basepairs"], reg_coef_filter=parameters["nn_reg_coef_filter"],
-        pooling_factor=parameters["nn_pooling_factor"], deep_dim=parameters["nn_deep_dim"],
+        kernel_nb=parameters["nn_kernel_nb"],
+        kernel_width_in_basepairs=parameters["nn_kernel_width_in_basepairs"],
+        reg_coef_filter=parameters["nn_reg_coef_filter"],
+        pooling_factor=parameters["nn_pooling_factor"],
+        deep_dim=parameters["nn_deep_dim"],
         region_size = int(parameters["pad_to"] / parameters['squish_factor']),
         nb_datasets = nb_datasets_model, nb_tfs = nb_tfs_model,
-        optimizer = opti_custom, loss = weighted_mse)
+        optimizer = opti_custom, loss = weighted_mse
+        )
 
     print('Model created.')
 
@@ -520,10 +525,10 @@ if parameters['perform_model_diagnosis']:
 
         for ID in range(len(before_batch)):
 
-            before_batch = next(train_generator)[0]
+            #before_batch = next(train_generator)[0]
 
             #
-            ID = 8
+            #ID = 8
 
             before_raw = np.copy(before_batch[ID,:,:,:,0])
 
@@ -540,37 +545,16 @@ if parameters['perform_model_diagnosis']:
             prediction_2d = np.max(prediction, axis=0)
             plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
 
-            utils.plot_3d_matrix(before_raw)
-
-
-
-
+            #utils.plot_3d_matrix(before_raw)
 
 
             #plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
             # # FLIPPED
-            before_raw = np.flip(before_raw, axis = -1)
-            before = np.around(before_raw-0.11)
-            prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-            prediction_2d = np.max(prediction, axis=0)
-            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            # before_raw = np.flip(before_raw, axis = -1)
+            # before = np.around(before_raw-0.11)
+            # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+            # prediction_2d = np.max(prediction, axis=0)
+            # plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens')
 
             utils.plot_3d_matrix(before, figsize=eval_figsize_large)
             clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
@@ -582,7 +566,6 @@ if parameters['perform_model_diagnosis']:
 
             anomaly_matrix = er.anomaly(before, prediction)
             utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
-
 
             """
             TODO should save some of those
@@ -802,14 +785,15 @@ if parameters['perform_model_diagnosis']:
                                 learning_rate = 1, nb_steps_gradient_ascent = 50,
                                 blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5)
 
+    UREXAMPLES_TO_PLOT = 100
 
-
-    for exid in range(len(urexamples)):
-        ex=urexamples[exid]
+    #for exid in range(len(urexamples)):
+    for exid in range(UREXAMPLES_TO_PLOT):
+        ex = urexamples[exid]
         ex = ex[...,0]
         #ex = np.around(ex/np.max(ex), decimals = 1)
         x = np.mean(ex, axis = 0)
-        plt.figure(figsize=eval_figsize_small); sns.heatmap(np.flip(x.transpose(), axis=0), cmap ='RdBu_r', center = 0)
+        plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0)
 
 
     # Move this somewhere else.
@@ -821,13 +805,6 @@ if parameters['perform_model_diagnosis']:
 
     plt.figure(figsize=eval_figsize_large); sns.heatmap(tmpd)
     utils.plot_3d_matrix(before)
-
-
-    """
-    VISUALIZATION OF ENCODED SHAPES IS VERY PROMISING ! NEED TO RETRY THIS WITH REAL DATA !!!!!!!!!
-    """
-
-
 
 
 
@@ -892,11 +869,6 @@ if parameters['perform_model_diagnosis']:
 # Switch : the user should calibrate with Q-score before processing the full data !
 # So in the parameters if the switch process_full_real_data is not on, it should exit here and there
 
-import importlib
-importlib.reload(utils)
-
-
-
 if not parameters["process_full_real_data"]:
     print("The parameter `process_full_real_data` was set to False, presumably because this was a parameter calibration run.")
     print("Hence, we stop before processing the real data.")
@@ -928,11 +900,26 @@ else:
         output_bed_path_final = root_output_bed_path + "_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
 
 
+
+
         ### Raw file production
 
         # Produce a raw, non-normalized file for this cell line
-        print('Producing bed file : '+output_bed_path)
-        er.produce_result_file(all_matrices, output_bed_path, model, get_matrix, parameters, datasets_clean, cl_tfs)
+        print('Producing scored BED file :',output_bed_path)
+        start_prod = time.time()
+        er.produce_result_file(all_matrices, output_bed_path,
+            model, get_matrix, parameters, datasets_clean, cl_tfs)
+        end_prod = time.time()
+        total_time_prod = end_prod-start_prod
+        print('Processed BED file produced in',str(total_time_prod),'seconds.')
+
+
+
+
+        importlib.reload(utils)
+
+
+
 
         # Put mean score for doublons
         utils.print_merge_doublons(bedfilepath = output_bed_path, outputpath = output_bed_merged)
@@ -956,8 +943,8 @@ else:
 
 
         # For reference, get the scores per tf and per dataset for the RAW data, before normalization
-        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_merged,
-            cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub)
+        # scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_merged,
+        #     cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub)
 
 
 
@@ -965,6 +952,9 @@ else:
 
         """
         CAREFUL, AT TIME OF WRITING THIS I OVERWRITE scores_by_tf_df AND scores_by_dataset_df LATER. DECIDE WHICH ONE TO OUTPUT.
+        The last one I think ? Adter my normalization ?
+
+        Or I can just keep both and print both...
         """
 
 
@@ -976,18 +966,23 @@ else:
 
         # Estimate corr group scaling factors
         corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(model = model,
-            all_datasets = datasets, all_tfs = cl_tfs,
+            all_datasets = datasets, all_tfs = cl_tfs, list_of_many_crms = list_of_many_crms,
             crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
             outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.txt")
 
-        utils.normalize_result_file_with_coefs_dict(output_bed_merged, corr_group_scaling_factor_dict,
-            cl_name = parameters['cell_line'], outfilepath = output_path_corr_group_normalized)
+
+
+
+
+        utils.normalize_result_file_with_coefs_dict(output_bed_merged,
+            corr_group_scaling_factor_dict, cl_name = parameters['cell_line'],
+            outfilepath = output_path_corr_group_normalized)
 
 
         ### Then Normalize the score by TF,
 
         scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_path_corr_group_normalized,
-            cl_name = parameters['cell_line'], outfilepath = output_bed_path_corr_group_and_tf_normalized)
+            cl_name = parameters['cell_line'], outfilepath = output_bed_path_final)
 
 
 
@@ -1149,8 +1144,37 @@ else:
 
 
 
+
+
+
+
+
+
+
+
             crm_file_path = "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
             # TODO UNHARDCODE THE CRM FILE PATH OF AT LEAST PUT IT AT THE BEGINNING !!!!!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
