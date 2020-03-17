@@ -17,21 +17,14 @@ PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed
 
 # ---------------------------------------------------------------------------- #
 
-
-
-
 # Important !
 .ONESHELL:
-
 
 
 install:
 	# Create the conda environment we need
 	conda env create -f env.yaml
 
-	# Might want to activate it and then update it
-	# source activate atypeak
-	# conda update --all
 
 
 # Turn the raw input_data into something readable by the model
@@ -48,7 +41,7 @@ clean :
 	# Remove all data and results
 	rm -rf ./data/input/
 	rm -rf ./data/output/
-	# We however keep the compresed input_raw
+	# We however keep the compressed input_raw
 
 
 
@@ -147,7 +140,7 @@ dictionaries:
 	# Each unique tuple in here will be a unique 2D slice of a matrix so add the line numbers.
 	# This way, later, we can quickly know which lines to read in the file to generate the matrices
 	# WARNING : The following awk command will produce nonsensical results on non-sorted files !
-	awk -F"|" '$$1==i{a=a"|"$$2}$$1!=i{print i"|"a; a=$$2}{i=$$1}END{print i"|"a}' cell_line_crm_tf_tuples_untreated.txt > cell_line_crm_tf_tuples.txt
+	awk -F"|" '$$1==i{a=a"|"$$2}$$1!=i{ print i"|"a; a=$$2}{i=$$1}END{print i"|"a}' cell_line_crm_tf_tuples_untreated.txt > cell_line_crm_tf_tuples.txt
 	tail -n +2 cell_line_crm_tf_tuples.txt > clcrmtf.tmp && mv clcrmtf.tmp cell_line_crm_tf_tuples.txt # Remove garbage first line from crm_tf_couples.txt
 
 	### We also need, for each of those matrices, the number of datasets which will provide a peak
@@ -201,17 +194,17 @@ split:
 
 
 
-### TODO remember to add those to .PHONY
 
 
-# Temporary, for sacapus cluster tests
-sacapus_run:
-	COMMAND="""mkdir -p qsub_output
-	conda activate atypeak
-	KERAS_BACKEND=theano
-	python3 main.py"""
-	printf "$${COMMAND}" > denoising_remap_main.sh
+# # Temporary, for sacapus cluster tests
+# # TODO Add it to .PHONY
+# sacapus_run:
+# 	COMMAND="""mkdir -p qsub_output
+# 	conda activate atypeak
+# 	KERAS_BACKEND=theano
+# 	python3 main.py"""
+# 	printf "$${COMMAND}" > denoising_remap_main.sh
 
-	qsub -V -q tagc -d $$PWD -l nodes=1:ppn=16 -e ./qsub_output -o ./qsub_output denoising_remap_main.sh
+# 	qsub -V -q tagc -d $$PWD -l nodes=1:ppn=16 -e ./qsub_output -o ./qsub_output denoising_remap_main.sh
 
-	rm denoising_remap_main.sh
+# 	rm denoising_remap_main.sh
