@@ -116,7 +116,8 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, 
     # How many different datasets files were there ?
     # This is given as input for consistency so matrices for each cell type have
     # the same number of lines
-    cleaned_names_ori = [dataset_parent_name(n) for n in datasets_names]
+    #cleaned_names_ori = [dataset_parent_name(n) for n in datasets_names]
+    cleaned_names_ori = datasets_names
     cleaned_names = sorted(list(set(cleaned_names_ori)), key=cleaned_names_ori.index) # Make unique and preserve original order
     names_ordered = {cleaned_names[i]:i for i in np.arange(len(cleaned_names))}
 
@@ -133,7 +134,8 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, 
         line = df.iloc[i,] # Stock the line in a variable for ease of reference
 
         # Get the name of the current dataset & Strip superfluous TF ID from ENCS* name
-        current_dataset = dataset_parent_name(line[3])
+        #current_dataset = dataset_parent_name(line[3])
+        current_dataset = line[3]
         # Get the line number for the dataset being processed
         line_of_matrix = names_ordered[current_dataset]
 
@@ -217,7 +219,8 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
         # If the couple (crm_id,tf) does not exist (because this CRM
         # has no peaks for this TF) return an empty matrix !
         if (crm_id, tf) not in cl_crm_tf_dict :
-            cleaned_names_ori = [dataset_parent_name(n) for n in cl_datasets]
+            #cleaned_names_ori = [dataset_parent_name(n) for n in cl_datasets]
+            cleaned_names_ori = cl_datasets
             cleaned_names = sorted(list(set(cleaned_names_ori)), key=cleaned_names_ori.index)
             names_ordered = {cleaned_names[i]:i for i in np.arange(len(cleaned_names))}
             zero_matrix = sp.csr.csr_matrix((len(names_ordered),crm_max-crm_min))

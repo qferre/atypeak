@@ -13,7 +13,8 @@ import itertools
 import pybedtools
 import numpy as np
 import pandas as pd
-from plotnine import *
+
+from plotnine import ggplot, aes, geom_histogram, scale_fill_grey, geom_violin, geom_boxplot, position_dodge, theme
 
 import lib.artificial_data as ad
 import lib.model_atypeak as cp
@@ -1013,7 +1014,7 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
 
 
     # Perform the required iterations
-    for i in range(n_iter):
+    for _ in range(n_iter):
 
         # Generate one artificial datum (CRM) with separated peaks using the
         # supplied partial call with no additional arguments.

@@ -1,4 +1,8 @@
+import sys
+import time
+
 import numpy as np
+import pandas as pd
 import scipy.sparse
 
 import keras
@@ -8,8 +12,12 @@ from keras.layers import Input, Dense, Dropout, Lambda
 from keras import regularizers
 from keras import backend as K
 
+from skimage.filters import gaussian as gaussian_filter
+
 
 from lib import utils
+
+
 
 
 
@@ -809,17 +817,6 @@ Can probably be used with LSTMs too according to https://medium.com/@plusepsilon
 
 
 
-import sys
-
-import numpy as np
-import pandas as pd
-# from keras import *
-# TODO never do that kind of import ! relaunch it to make sure all functions were properly imported
-from keras.models import *
-from keras.layers import *
-from skimage.filters import gaussian as gaussian_filter
-import time
-from keras import backend as K
 
 
 def compute_max_activating_example_across_layer(model,
