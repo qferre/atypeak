@@ -9,12 +9,3 @@ data/input_raw/*.bed
 
 # Python cache
 */__pycache__/*
-
-
-# Snakemake temp
-temp/
-.snakemake/
-*/.snakemake/
-
-# Output of qsub
-qsub_output/
