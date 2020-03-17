@@ -16,12 +16,11 @@ import scipy
 # Plotting
 import matplotlib.pyplot as plt
 import seaborn as sns
-from plotnine import *
+from plotnine import ggplot, aes, geom_violin, geom_boxplot, position_dodge, scale_fill_grey
 
 # ML
 import keras
 import keras.backend as K
-
 
 ## Custom libraries
 import lib.model_atypeak as cp      # Autoencoder functions
@@ -328,34 +327,48 @@ list_of_many_crms = er.get_some_crms(train_generator, nb_of_batches_to_generate 
 
 
 
-    # HELA debug combis
-    all_combis = [
-        ('GSE40632','aff4'),
-        ('GSE40632','ell2'),
-        ('GSE45441','rcor1'),
-        ('GSE45441','sfmbt1'),
-        ('GSE22478','phf8'),
-        ('GSE22478','e2f1'),
-        ('GSE51633','brd4'),
-        ('GSE39263','znf143'),
-        ('GSE31417','znf143'),
-        ('GSE31417','yy1'),
-        ('GSE31417','gabpa'),
-        ('GSE44672','myc')
-    ]
+    # # HELA debug combis
+    # all_combis = [
+    #     ('GSE40632','aff4'),
+    #     ('GSE40632','ell2'),
+    #     ('GSE45441','rcor1'),
+    #     ('GSE45441','sfmbt1'),
+    #     ('GSE22478','phf8'),
+    #     ('GSE22478','e2f1'),
+    #     ('GSE51633','brd4'),
+    #     ('GSE39263','znf143'),
+    #     ('GSE31417','znf143'),
+    #     ('GSE31417','yy1'),
+    #     ('GSE31417','gabpa'),
+    #     ('GSE44672','myc')
+    # ]
 
 
 
-    combi = ('GSE22478','phf8')
+    # combi = ('GSE22478','phf8')
 
 
 
-    # Try an impossible combi and see !
-    combi = ('GSE20303', 'nr2c2')
+    # # Try an impossible combi and see !
+    # combi = ('GSE20303', 'nr2c2')
 
-    """
-    OKAY THE NONSENSICAL ONES MUST BE DUE TO CRUMBING
-    """
+    # """
+    # OKAY THE NONSENSICAL ONES MUST BE DUE TO CRUMBING
+    # """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 """
 Keep this somewhere and do some plots with it like I do in the paper !!!!!!!!
@@ -366,14 +379,17 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
                                     all_datasets, all_tfs, model,
                                     before_value = 1):
 
+    combi = dataset_name, tf_name # Create this tuple to match the format of the other code
 
-    curr_dataset = combi[0] # get id in list of the dataset
-    curr_tf = combi[1] # get id in list of the tf
-    curr_dataset_id = datasets.index(curr_dataset)
-    curr_tf_id = cl_tfs.index(curr_tf)
+    curr_dataset = combi[0] 
+    curr_tf = combi[1] 
+
+    # get id in list of the dataset and tf
+    curr_dataset_id = all_datasets.index(curr_dataset)
+    curr_tf_id = all__tfs.index(curr_tf)
 
     # Create an empty CRM with a peak only for this combi
-    x = np.zeros((crm_length,len(all_datasets),len(all_tfs)))
+    x = np.zeros((crm_length, len(all_datasets), len(all_tfs)))
     x[:,curr_dataset_id, curr_tf_id] = before_value
     x[:,:, curr_tf_id] += 0.1*before_value
     x[:,curr_dataset_id, :] += 0.1*before_value
@@ -391,6 +407,30 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
     plt.figure(figsize = (6,5)); sns.heatmap(np.transpose(prediction_2d),
         annot=True, cmap = 'Greens',
         xticklabels = all_datasets, yticklabels = all_tfs, fmt = '.2f')
+
+
+"""
+Much like pairs, do in the yaml a section for which ones this should be applied to, like this :
+
+estimate_corr_group_for:
+    - GEO12345, TAL1
+    - GEO11111, BFC4
+
+
+
+for combi in parameters['estimate_corr_group_for']:
+    dataset, tf = combi
+    fig = estimate_corr_group_for_combi(dataset, tf)
+    fig.savefig(the_output_path)
+
+"""
+
+
+
+
+
+
+
 
 
 
@@ -823,7 +863,7 @@ else:
 
 
 
-        importlib.reload(utils)
+        
 
 
 
