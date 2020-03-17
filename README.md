@@ -1,6 +1,4 @@
-# atyPeak-SCAEN
-
-atyPeak - Stacked Convolutional Autoencoder Neural network
+# atyPeak
 
 This repository presents a tool for correlating peaks (BED file regions) from multiple datasets using convolutional autoencoders for k-dimensional tensors.
 
@@ -13,14 +11,12 @@ Please see the paper for more details.
 
 ## Description
 
-Quickly summarize the philosphy : few layers, stacked multiview, compression to lose anomalies and keep good features
+Quickly summarize the philosphy : few layers, stacked multiview, convolution for combis, autoencoder for compression to lose anomalies and keep good features
 
 
-### Results availability
+### Results
 
 ReMap data has been processed, available here : www.remap/the_tab_that_Benoit_promised_me
-
-### Data source
 
 The raw data included here is a subset of ReMap 2018 data, source is <remap link>
 
@@ -28,15 +24,15 @@ The raw data included here is a subset of ReMap 2018 data, source is <remap link
 
 ## Usage
 
-TOBE BE MORE DESCRIPTIVE !
+
 
 ### Installation
 
 Works only on linux and macos due to pybedtools
 
-- Run `make install`, to create a conda environment.
+- Run `make install`, to create a conda environment. called 'atypeak'.
 
-- Place the input data in *./data/input_raw/* and follow the correct data format, outlined in ./data/input_raw/data_format.md
+- Place the input data in *./data/input_raw/* and follow the correct data format, outlined below
 
 BE SURE TO CHANGE THE CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE !!!
@@ -45,30 +41,21 @@ PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE 
 
 ### Running
 
-- Set the parameters in *parameters.yaml*
+- Set the parameters in *parameters.yaml*. The meaning of them is detailed in YAML comments
 
-Then use `make run`. The network is comparatively shallow and can be run on a CPU, but we still recommend a GPU.
+Then use `make run`. The network is comparatively shallow and can be run on a CPU.
 
-- Once you run the script once, you will have a trained model names trained_{cell_line}_model.h5 ; this way you can now activate use_trained_model in the parameters.
+Set load_saved_model and process_full_real_data to False, so you will train a model, evaluate it with Q-score, and save it.
 
-BETTER IDEA : run make train which will give you a trained model with corresponding q-scoresYou can also use pythonwrappers there for grid search
-Once satisfied, run make process which will reoad the model and process the data
-  I do this manually finally
+- Once you run the script once, you will have a trained model names trained_{cell_line}_model.h5 ; this way you can now activate use_trained_model in the parameters in the yaml.
 
+This will also produce q-score and other diagnostics plots and info in the output directory.
 
-
-To sum up :
-
-### Running
+Look at the diagnostic plots : MOST NOTABLY look at some examples of rebuit CRMS (TODO MAKE THOSE BE PRINTED) to see if there are enough corr groups, and look at the q-score (see paper)
 
 
-Say that you should run some tries, find a model you like, and THEN :
-    - flip the load_saved_model switch to True (the model is automatically saved after training). not mandatory, if you don't you'll simply re-train the model with the current parameters.
-        TODO MAKE IT HAPPEN AND SAY SO IN README : I believe if load_saved_model is true, we should skip the diagnosis steps like the Q_score
-    - flip the process_full_date to True
 
-Set the model parameters in parametrs.yaml. Set load_saved_model and process_full_real_data to False, so you will train a model, evaluate it with Q-score, and save it.
-Once satisfied, set those two parameters to True so that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis.
+Once satisfied, set those two parameters (load_saved_model and process_full_real_data) to True  and then use `make run` againso that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis. This is done because processing the real data is the most consuming part
 
 
 
@@ -76,17 +63,8 @@ Once satisfied, set those two parameters to True so that you reload the model an
 
 
 
-### Parameters
-
-Parameters such as :
-- whether this is a test on artificil data or actual processing of real data
-- which cell line is being processed
-- whether to train a model or use one that has already been trained
-
-are fixed in the parameters.yaml before a run. main.py will read this file and run its code.
 
 
-If you run artificial data, it will produce some more diagnostic plots ?
 
 
 
@@ -113,7 +91,7 @@ The first three fields are standard BED (chromosome, start, end). The name is ir
 WAIT NO I NUMBER THEM MYSELF, THOSE ARE SCORES. SO JUST A STANDARD BED WHERE ONLY THE FIRST THREE COLUMNS ARE CONSIDERED ?
 
 
-#### peak file
+#### Peaks data file
 
 ```
 chr1	10135	10285	GSE42390.tal1.erythroid	12.67102	.	10261
