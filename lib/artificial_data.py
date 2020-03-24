@@ -11,7 +11,7 @@ Functions to generate artificial data for model evaluation.
 
 In broad strokes, the data generated will place a stack of peaks (plus some noise as well as a constant watermark at 0,0)
 
-This stack will be places in "reliable_datasets" and by picking either one of two TF correlation groups.
+This stack will be placed in "reliable_datasets" and by picking either one of two TF correlation groups.
 
 The goal is to show that the model will usually rebuilt the correlation group as a whole, but nothing from the other group.
 """
@@ -23,7 +23,6 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
                     watermark_prob = 0.75, tfgroup_split = 2/3, overlapping_groups = False, crumb = None):
     """
     Generator object that calls the make_a_fake_matrix() function.
-
 
     Most arguments are self explanatory.
         - region_length, nb_datasets and nb_tfs give the matrix dimensions.
@@ -210,7 +209,7 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
 
     # In some cases you may not want noise (ie. for pre-training)
-    # TODO Split stack and nosie into their own functions
+    # TODO Split stack and noise into their own functions
 
     ## NOISE STEP
     if noise :
@@ -253,9 +252,9 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
 
 
-    # TODO NOTE : For now artificial data has no crumbs.
+    # NOTE : For now artificial data has no crumbs.
     # Must allow it to be changed here. Less useful in artificial because the
-    # dimensions and sparsity are usually smaller in proof-of-concetps.
+    # dimensions and sparsity are usually smaller in proof-of-concepts.
 
     # Convert list of peaks to tensor
     result = list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb = False, ones_only = ones_only)
@@ -264,5 +263,5 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
     result = np.clip(result,0,1)
 
     return result
-    # TODO : make it possible to return (matrix) or (matrix, matrix_without_noise)
-    # TODO Those matrices are quite denser than typical real ones, may need to revise down number of parameters
+    # TODO Make it possible to return (matrix) or (matrix, matrix_without_noise)
+    # NOTE Those matrices are quite denser than typical real ones, may need to revise down number of parameters

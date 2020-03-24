@@ -1,10 +1,3 @@
-"""
-# Put here functions for :
-# Anomaly score
-# Evaluations
-# Diagnosis
-"""
-
 import sys
 
 import numpy as np
@@ -17,64 +10,8 @@ from plotnine import geom_histogram, geom_violin, geom_boxplot
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import skimage.measure
 
 from lib import artificial_data
-
-
-#
-# def add_noise(mat, frequencies, return_pos):
-#     """
-#     Adds peak noise (trace along X axis), frequencies i
-#
-#     mat : the 3D matrix to which we add the noise
-#     frequencies : a 2d matrix of the axes Y and Z of the `mat` matrix. When picing a (Y,Z) for each noise peak, odds will be taken from this frequencies object.
-#     return_pos : if True, return both the matrix with noise and the positions of the noisy tfs.
-#
-#     param : add ways to control peak generation
-#     """
-#
-#     noise_nb = ss.poisson(1).rvs()
-#     for _ in range(noise_nb): # Add some random peaks
-#
-#
-#         r_center = int(ss.uniform(0,mat.shape[0]).rvs())
-#         r_length = int(ss.lognorm(scale=mat.shape[0]/15,s=0.25).rvs())
-#         #r_intensity = ss.norm(500,120).rvs() + ss.norm(10,10).rvs()
-#         r_intensity = 1
-#
-#         # Pick TF and dataset from 2D weights
-#
-#
-#         p = np.array([[0.9, 0.1, 0.3], [0.4, 0.5, 0.1], [0.5, 0.8, 0.5]])
-#         frequencies = p
-#
-#
-#
-#
-#         linear_idx = np.random.choice(frequencies.size, p=frequencies.ravel()/float(frequencies.sum()))
-#         r_dataset, r_tf = np.unravel_index(linear_idx, frequencies.shape)
-#
-#         r_dataset, r_tf
-#
-#
-#     # TODO ! THE WEIGHTS WILL BE DONE THROUGH, LIKE,  1000 RANDOM CRMS WITHOUT NOISE, LIKE THE USUAL
-#
-#
-#
-#
-#     # Now turn this list of noise peaks into a matrix, and sum it to the original matrix
-#
-#     ar.list_of_peaks_to_matrix(noise_peaks)
-#
-#
-#
-#
-#     # Maybe clip the new, summed matrix at its maximum of before or something. (to prevent one peak atop the other making it exceed previous values)
-#
-#     # Great ! now use this on the generator for data, and see if it improves matters
-#
-#
 
 
 
@@ -84,7 +21,8 @@ from lib import artificial_data
 
 
 def zeropad(arr, pad_width):
-    """Pad array with zeros.
+    """
+    Pad array with zeros.
     pad_width : sequence of tuple[int, int], like in np.pad
         Pad width on both sides for each dimension in `arr`.
     """
@@ -124,27 +62,11 @@ def bin_ndarray(ndarray, new_shape, operation='mean'):
         ndarray = op(-1*(i+1))
     return ndarray
 
-# ### MaxPooling and Extending a 3d matrix along its first axis (the [0] axis)
-# # Rq : those matrices are '4D' due to the channel dimension
-# def squish(m, factor=10):
-#     # 'Squishing' is done by MaxPooling across the 'region length' dimension.
-#     if len(m.shape) != 4 : raise ValueError('squish() needs a 4D matrix (region_length, nb_datasets, nb_tf, channels=1)')
-#     return skimage.measure.block_reduce(m, (factor,1,1,1), np.max)
-
-
-# New version, slighlty faster, does not require skimage
-def squish(m, factor=10, squishing_a_batch = False):
+# MaxPooling a 3d matrix along its first axis (the [0] axis, for "region length")
+def squish(m, factor=10):
     # Calculate new shape based on desired reduction
-    if not squishing_a_batch:
-        new_shape = tuple([int(m.shape[0]/factor)]) + (m.shape[1:])
-    else:
-        # Same as squish, but will squish the SECOND dimension instead of the first
-        # to work on 5D arrays (batch_size, region_length, nb_datasets, nb_tfs, 1)
-        new_shape = tuple([m.shape[0]]) + tuple([int(m.shape[1]/factor)]) + (m.shape[2:])
+    new_shape = tuple([int(m.shape[0]/factor)]) + (m.shape[1:])
     return bin_ndarray(m, new_shape=new_shape, operation='max')
-
-
-
 
 def stretch(m, factor=10):
     # Kronecker product to up-sample.
@@ -152,53 +74,6 @@ def stretch(m, factor=10):
     # peaks lengths were not divisible by the squishing factor).
     if len(m.shape) != 4 : raise ValueError('stretch() needs a 4D matrix (region_length, nb_datasets, nb_tf, channels=1)')
     return np.kron(m, np.ones((factor,1,1,1)))
-
-
-
-
-"""
-# TODO REMOVE SKIMAGE DEPENDENCY IN ENV IF I REPLACE IT !
-
-l = k = 0
-
-import time
-
-m = np.arange(0,1280000,1).reshape((3200,20,20,1))
-
-factor = 10
-
-s = time.time()
-for i in range(32):
-    new_shape= tuple([int(m.shape[0]/factor)]) + (m.shape[1:])
-    return bin_ndarray(m, new_shape=new_shape, operation='max')
-e = time.time()
-print(e-s)
-
-s = time.time()
-for i in range(32):
-    l =skimage.measure.block_reduce(m, (factor,1,1,1), np.max)
-e = time.time()
-print(e-s)
-
-np.sum(k == l)
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -227,7 +102,6 @@ def plot_3d_matrix(mat, figsize=(10,6),
     >>> m[1500:2300,2,2] = m[1500:2300,4,2] = 1
     >>> m[0:800,1,3] = 1
     >>> plot_3d_matrix(m, guideline = False, tf_colors_override = [(0,0,0.6),(0.5,0,0.5),(0,0.8,0),(1,0.6,0)])
-
 
     """
 
@@ -274,18 +148,13 @@ def plot_3d_matrix(mat, figsize=(10,6),
 
 
     ## Turn the volumetric data into an RGB array.
-    # NOTE : the color of each point could be made conditional by applying operations to `c`, if needed.
+    # NOTE The color of each point could be made conditional by applying operations to `c`, if needed.
     c_raw_list = [mat[int(xr[i]),int(yr[i]),int(zr[i])] for i in range(len(xr))] # xr, yz and zr have the same nb of elements
     c_raw = np.array(c_raw_list)
     c = np.tile(c_raw[:,None], [1, 3]) # Fake RGB tiling
 
 
-
-
-
-
-
-    # Scale
+    ## Color scale
     if not standard_scale: c = (c-np.min(mat))/(np.max(mat)-np.min(mat))
 
     # Plot values as white (low) -> black (high)
@@ -298,36 +167,13 @@ def plot_3d_matrix(mat, figsize=(10,6),
 
 
 
-
-
-
-
-
-    #DEBUG : TF COLOR OVERRIDE FOR PAPER FIG
+    # DEBUG - TF color override for figures 
     if tf_colors_override is not None:
-    #For display, use one color per TF, in the order given by a vector
-    #tf_colors_override = [(255,255,0),(255,255,255),...]
-
+    # For display, use one color per TF, in the order given by a vector
+    # tf_colors_override = [(255,255,0),(255,255,255),...]
         for i in range(len(xr)):
             c[i,:] = np.array(tf_colors_override[int(zr[i])])
         c = np.array(c)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     ## Do the plotting in a single call.
@@ -337,14 +183,12 @@ def plot_3d_matrix(mat, figsize=(10,6),
                c=c, s=20,
                alpha=alpha) # See-through to see far elements.
 
-
     # To better see perspective, for each y,z pair with nonzero elements, draw a line across it
     if guideline :
         for Y in range(mat.shape[1]):
             for Z in range(mat.shape[2]):
                 if sum(mat[:,Y,Z]) != 0:
                     ax.plot([0 ,mat.shape[0]],[Y,Y],[Z,Z])
-
 
     # To understand the scale, print min, max and mean values.
     scale = 'Min = '+"{:.2E}".format(np.min(mat))+' - Mean = '+"{:.2E}".format(np.mean(mat))+' - Max = '+"{:.2E}".format(np.max(mat))
@@ -355,7 +199,7 @@ def plot_3d_matrix(mat, figsize=(10,6),
     ax.set_ylim(0,mat.shape[1])
     ax.set_zlim(0,mat.shape[2])
 
-
+    return fig # and then in main code do this_fig.savefig()
 
 
 
@@ -374,9 +218,6 @@ def plot_3d_matrix(mat, figsize=(10,6),
 ################################################################################
 
 
-
-
-
 def produce_result_bed(origin_data_file, anomaly_matrix,
                         ordered_datasets, ordered_tfs,
                         crm_start, crm_length,
@@ -392,7 +233,6 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
     # Convert origin_data_file from a list of strings to a list of lists
     origin_lines = [l.rstrip().split('\t') for l in origin_data_file]
 
-
     # For datasets and names : since they are given in the same order as the matrix,
     # prepare a conversion key form coordinate to dataset_id/tf_id
     ordered_datasets = {ordered_datasets[i]:i for i in np.arange(len(ordered_datasets))}
@@ -403,8 +243,6 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
     for peak in origin_lines:
 
         # Collect its coordinates
-        chrom = peak[4]
-
         pad_to = anomaly_matrix.shape[0] # Fix coordinates due to padding
         xmin_original = peak[5]
         xmin = (pad_to - crm_length) + (int(xmin_original) - crm_start)
@@ -412,7 +250,7 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
         xmax = (pad_to - crm_length) + (int(xmax_original) - crm_start)
 
 
-        # REMARK Sometimes peaks were inside the CRM for less than 10 base pairs, and those will have been squished out by the, well, squishing.
+        # NOTE Sometimes peaks were inside the CRM for less than 10 base pairs, and those will have been squished out by the, well, squishing.
         # In that case, the anomaly matrix may be an improper slice.
         # To fix this, we use nanmean and we set xmin to be at least 0, and xmax to be maximum the matrix length.
         # xmax must also be at least one higher than xmin.
@@ -421,7 +259,6 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
         if xmax == xmin : xmax = xmin+1
 
 
-        cell_line = peak[0]
         tf = ordered_tfs[peak[2]]
         dataset = ordered_datasets[peak[3]]
 
@@ -453,88 +290,26 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
 
 
-        # Maximum score along the peak, and double it given that in originl trial most scores were under 400
-        #anomaly_score = int(np.clip(np.nanmax(anomaly_vector) * 1000    * 2     , 0, 1000))
-
-        #
-
-        """
-        I CAN'T JUST THROW THAT LIKE HERE (the multiplication I mean) !!!! MUST SAY SO IN THE PAPER OR SOMETHING !!!!!!!
-
-        HMPF since I normalize this is likely just useless.
-        YEAH I REMOVED THIS GODDAMN UNJUSTIFIABLE MULTIPLICATION
-
-        ALSO REMOVE CLIPPING
-        """
-
-
+        ## Maximum score along the peak
         anomaly_score_raw = np.nanmax(anomaly_vector) * 1000
         anomaly_score = int(np.around(anomaly_score_raw))
-
-
-
-
-        # TODO : INSTEAD OF MAXIMUM SCORE, MEAN WOULD BE BETTER ACCORDING TO ARTIFICIAL DATA. It sadly makes much more many peaks seen as noise. Try to find a compromise.
-
-        """
-        HMPF KEEP MAX FOR NOW. REMEMBER TO SAY IN THE PAPER THAT I TAKE MAX ?
-        """
-
-
-        # Explain that we multiply by 1000 and round at 1000 to match the typical bed score format
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        # We multiply by 1000 to match the typical BED score format
 
         if debug_print : print('Peak : ('+str(xmin)+' -> '+str(xmax)+','+str(tf)+','+str(dataset)+') -- Anomaly = '+str(anomaly_score))
 
 
-
-        # TODO Add gregariousness (in the average CRM, the guide, how many non-zero elements are there in the same row ? the same column ?)
-        # TODO Add other info : say how many peaks there were originally in this CRM
-
-        # Produce the result lines in remap format :
+        # Produce the result lines in ReMap format :
         # chr    start   end    dataset.tf.cell_line    score   strand
         result = (str(peak[4])+'\t'+str(xmin_original)+'\t'+str(xmax_original)+'\t'+
             peak[3]+'.'+peak[2]+'.'+peak[0]+'\t'+ #peak[the dataset]+'.'+peak[the tf]+'.'+peak[the cell line]+'\t'+
             str(anomaly_score)+'\t'+'.')
+        # TODO Add gregariousness : how many peaks in the same row, column, or entire CRM.
+        # Also keep the MACS score and the peak center ?
 
-        # TODO instead keep the MACS score and the peak center and add anomaly score + gregariousness in other columns
-        # TODO scores in BED files must be between 0 and 1000. Be careful about that when normalizing.
         result_bed.append(result)
 
 
     return result_bed
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -580,14 +355,7 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
 
 
 
-#
-# tmp = 'chr11	62545614	62545830	GSE59657.MYB.JURKAT	277.78711915016174'
-# tmp = tmp.split('\t') # Split by tab
-# tmp[3] = tmp[3].split('.') # Further split the dataset.tf.cell_line line
-# tmp[3][1]
-#
-# tmp[3] = '.'.join(tmp[3])
-# '\t'.join(tmp)
+
 
 
 
@@ -627,26 +395,6 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict,
 
     normalized_rf.close()
     rf.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -719,14 +467,14 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
 
 
     # Write a normalized file
-    # WE NORMALIZE BY TF ONLY ! I keep the scores by dataset only for information !
+    # We normalize by TF only, but I keep the scores by dataset for information
     if outfilepath is None : outfilepath = result_file_path + "_normalized_by_tf.bed" # Default file path
     normalized_rf = open(outfilepath,'w')
     # Header
     normalized_rf.write('track name ='+cl_name+'_tf-normalized description="'+cl_name+' peaks with anomaly score - normalized by TF" useScore=1'+'\n')
 
 
-    # RE-OPEN ORIGINAL RESULT FILE
+    ## Re-open original result file RE-OPEN ORIGINAL RESULT FILE
     rf = open(result_file_path,'r')
 
     for line in rf:
@@ -734,15 +482,8 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
             line = line.split('\t') ; line[3] = line[3].split('.')
             tf = line[3][1] ; score = float(line[4])
 
-            #new_score = (score - min_obs[tf]) / (max_obs[tf] - min_obs[tf]) * 1000
-            # NO HARDCODE MIN OBS AT ZERO BECAUSE IF A TF IS ALWYS GOOD IT WOULD BE BAD THEN
-            # FINALLY WRITE DEPENDING ON MEDIAN
-
-            """
-            The scores are not normally distributed, but I'm gonna use this anyways.
-            """
+            # Apply a "normalization" (does not mean the scores are normally distributed)
             new_score = (score - scores_df_tf.at[tf, 'mean']) / scores_df_tf.at[tf, 'std']
-
 
             # Center at 500.
             # I take 0.5 * new_score to reduce the dispersion a bit.
@@ -751,32 +492,8 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
 
             if np.isnan(new_score) : new_score = 0 # Hotfix
 
-
-
-
-
-
-            # ONLY NOW clip at 1000 to match bed format  ! (keep the clipping or not ?)
+            # FINALLY clip at 1000 to match BED format
             new_score = int(np.around(np.clip(new_score,0,1000)))
-
-
-            """
-            TODO : DO I EVEN KEEP THE CLIPPING OR NOT ???????????????????
-            """
-
-
-
-
-
-
-            #new_score = score / max_obs[tf] * 1000
-            # print('----------')
-            # print("TF : ",tf)
-            # print("Old score : ",score)
-            # print("Max score for this TF : ",max_obs[tf])
-            # print("New score : ",new_score)
-
-
 
             # Rejoin line and write it
             line[4] = str(new_score)
@@ -785,9 +502,5 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
             normalized_rf.write(line)
     normalized_rf.close()
     rf.close()
-
-
-
-
 
     return scores_df_tf, scores_df_datasets

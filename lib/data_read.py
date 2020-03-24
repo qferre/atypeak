@@ -146,11 +146,10 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, 
         if use_scores:
             score_peak = line[7]
             peak_summit = line[8]
-            # TODO do something with peak summit
+            # TODO Do something with peak summit
         # Currently all peaks are read as 1
         else:
             score_peak = 1
-
 
 
         # Get endpos and startpos

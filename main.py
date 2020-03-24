@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ------------------------------ Imports ------------------------------------- #
 
 # System
@@ -29,7 +28,6 @@ import lib.artificial_data as ad    # Trivial data for control
 import lib.result_eval as er        # Result production and evaluation
 import lib.utils as utils           # Miscellaneous
 
-
 ################################## PARAMETERS ##################################
 
 try: root_path = os.path.dirname(os.path.realpath(__file__))
@@ -52,27 +50,32 @@ if K.backend() == 'tensorflow' :
 
 ## Reading corresponding keys. See the documentation of prepare() for more.
 crmtf_dict, datasets, crmid, datapermatrix, peaks_per_dataset, cl_tfs = dr.prepare(parameters['cell_line'], root_path)
+
+
+
+#datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets] # TODO Datasets : might wish to use a parent name later
+datasets_clean = sorted(list(set(datasets)), key=datasets.index) # Make unique while preserving order, which a `set` would not do
+
+
 # Since those dictionaries are fixed for a cell line, prepare a partial call
 get_matrix = partial(dr.extract_matrix,
     all_tfs = cl_tfs,
     cell_line = parameters['cell_line'], cl_crm_tf_dict = crmtf_dict,
-    cl_datasets = datasets, crm_coordinates = crmid,
+    cl_datasets = datasets_clean, crm_coordinates = crmid,
     datapath = root_path+'/data/input/sorted_intersect/')
 
-# TODO Datasets : might wish to use a parent name later
-#datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets]
-datasets_clean = sorted(list(set(datasets)), key=datasets.index) # Make unique while preserving order, which a `set` would not do
 print('Parameters loaded.')
 
 
 
 """
-# TODO Compute weights for the loss : based on the `crmtf_dict` object and also on the `datapermatrix` and `peaks_per_dataset` objects, we know
-# the number of elements for each combination of TF/dataset.
+# TODO  To compute weights for the loss : based on the `crmtf_dict` object and 
+# also on the `datapermatrix` and `peaks_per_dataset` objects, we know the 
+# number of elements for each combination of TF/dataset.
 """
 
 
-# Plot output path
+# Plot output path (different for artificial data)
 plot_output_path = './data/output/diagnostic/'+parameters['cell_line']+'/'
 if parameters['use_artificial_data'] : plot_output_path += 'artificial/'
 if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
@@ -84,7 +87,6 @@ if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
 # You may use either the artificial data generator or the true data.
 # Artificial data is mainly used for calibrations and demonstrations.
 
-
 if parameters['use_artificial_data'] :
     # ------------------------- Artificial data ------------------------------ #
     train_generator = ad.generator_fake(region_length = parameters['pad_to'],
@@ -93,7 +95,7 @@ if parameters['use_artificial_data'] :
                                         watermark_prob = parameters['artificial_watermark_prob'],
                                         overlapping_groups = parameters['artificial_overlapping_groups'],
                                         tfgroup_split = parameters['artificial_tfgroup_split'],
-                                         crumb = None)
+                                        crumb = None)
     print('Using artificial data of dimensions : '+str(parameters['artificial_nb_datasets'])+' x '+str(parameters['artificial_nb_tfs']))
 else:
     # ---------------------------- Real data --------------------------------- #
@@ -120,7 +122,6 @@ def prepare_model_with_parameters(parameters):
     A wrapper function that will prepare an atyPeak model given the current parameters.
     Non-pure, since it depends on the rest of the code.
     """
-
 
     # Optimizer : Adam with custom learning rate
     optimizer_to_use = getattr(keras.optimizers, parameters["nn_optimizer"])
@@ -158,9 +159,8 @@ def prepare_model_with_parameters(parameters):
     # TODO : make a 2d matrix of weights instead, one weight for each specific tf+dataset pair. See draft code in the function source.
 
 
-
     # Finally, create the atypeak model
-    model = cp.create_model_atypeak_model(
+    model = cp.create_atypeak_model(
         kernel_nb=parameters["nn_kernel_nb"],
         kernel_width_in_basepairs=parameters["nn_kernel_width_in_basepairs"],
         reg_coef_filter=parameters["nn_reg_coef_filter"],
@@ -183,7 +183,6 @@ def prepare_model_with_parameters(parameters):
 
 # Prepare the model
 model = prepare_model_with_parameters(parameters)
-
 
 
 # Control print of parameters
@@ -214,37 +213,36 @@ def train_model(model,parametrs):
         K.set_session(sess)
 
 
-    # IMPORTANT To get around this problem, we re-create the model first, then load ONLY the weights !
+    # NOTE This does not like custom optimizers it seems. To get around 
+    # this problem, we re-create the model first, then load ONLY the weights !
+    
     if parameters['load_saved_model']  :
         model_path = root_path+'/data/output/model/trained_model_'+parameters['cell_line']+'.h5'
         try:
             #model = load_model(model_path, custom_objects={"K": K, "optimizer":opti_custom}))
             model.load_weights(model_path)
-        # does not like custom optimizers it seems? So I rebuild the model an just reload the weights.
+       
         except OSError: raise FileNotFoundError("load_saved_model is True, but trained model was not found at "+model_path)
 
 
-        # TODO Due to a weird bug, I need to re-train the model one step after loading it. Try to find out why.
-        model.fit_generator(train_generator, verbose=0, steps_per_epoch = 1, epochs = 1, max_queue_size = 1)
-
-        # TODO : might need more than 1 epoch sometimes !?
+        # NOTE Due to a weird bug, I need to re-train the model for a few epochs after loading it.
+        model.fit_generator(train_generator, verbose=0, steps_per_epoch = 1, epochs = 2, max_queue_size = 1)
 
         print('Loaded a saved model.')
 
     else :
         # Callback for early stopping
-        es = cp.EarlyStoppingByLossVal(monitor='loss', value=parameters['nn_early_stop_loss_absolute'], patience=2)    # Don't stop as soon as exact floor is reached (patience)
-
-
+        # Don't stop as soon as exact floor is reached (patience)
+        es = cp.EarlyStoppingByLossVal(monitor='loss', value=parameters['nn_early_stop_loss_absolute'], patience=2)    
+        
         # Stop in any case after several epochs with no improvement
-        # Changed the patience to 8 since I diminished the learning rate and added a delta
         es2 = keras.callbacks.EarlyStopping(monitor='loss',
             patience = parameters['nn_early_stop_patience'], min_delta = parameters['nn_early_stop_min_delta'],
-            restore_best_weights = True)
-            # Try to combat loss spikes and restore the best weights
+            restore_best_weights = True)  # Try to combat loss spikes and restore the best weights
+           
 
-        # NEW : I have increased the training : now 48 batches of 48 examples per epoch (and so diminseed the patience to 5 because the "restore_best_weights" clause could restore an overfitted model some time
-        # I observed this wit non-uniform rebuilding, abundance biais, weird artifacts, etc. and making bigger epochs reduced the problem, so we kept it
+        # NOTE To combat overfitting, we use larger batches and lower learning rates 
+
         """
         # DEBUG : save at every epoch
         class CustomSaver(keras.callbacks.Callback):
@@ -264,8 +262,6 @@ def train_model(model,parametrs):
             max_queue_size = 1) # Max queue size of 1 to prevent memory leak
         end = time.time()
 
-
-
         total_time = end-start
         print('Training of the model completed in '+str(total_time)+' seconds.')
 
@@ -282,17 +278,10 @@ def train_model(model,parametrs):
         print('Model saved.')
 
 
-
-
-
     return model
 
 # Train the model
 model = train_model(model, parameters)
-
-
-
-
 
 
 
@@ -308,138 +297,11 @@ model = train_model(model, parameters)
 ################################################################################
 
 
-
-# Get some CRMs (like, 200*48 or something)
-# This is used MANY times in the code, for q-score, many diagnostics, abundane, normalization, etc.
-list_of_many_crms = er.get_some_crms(train_generator, nb_of_batches_to_generate = 200)
-
-# TODO MUST MAKE nb_of_batches_to_generate a PARAMETER !!!!!!!
-#nb_of_batches_to_generate = parameters['nb_batches_generator_for_ref_list_of_many_crms']
-
-
-
-
-
-
-
-
-
-
-
-
-    # # HELA debug combis
-    # all_combis = [
-    #     ('GSE40632','aff4'),
-    #     ('GSE40632','ell2'),
-    #     ('GSE45441','rcor1'),
-    #     ('GSE45441','sfmbt1'),
-    #     ('GSE22478','phf8'),
-    #     ('GSE22478','e2f1'),
-    #     ('GSE51633','brd4'),
-    #     ('GSE39263','znf143'),
-    #     ('GSE31417','znf143'),
-    #     ('GSE31417','yy1'),
-    #     ('GSE31417','gabpa'),
-    #     ('GSE44672','myc')
-    # ]
-
-
-
-    # combi = ('GSE22478','phf8')
-
-
-
-    # # Try an impossible combi and see !
-    # combi = ('GSE20303', 'nr2c2')
-
-    # """
-    # OKAY THE NONSENSICAL ONES MUST BE DUE TO CRUMBING
-    # """
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-Keep this somewhere and do some plots with it like I do in the paper !!!!!!!!
-Keep it in result_eval and do some plots !!
-Add some comments of course to explain all that code
-"""
-def estimate_corr_group_for_combi(dataset_name, tf_name,
-                                    all_datasets, all_tfs, model,
-                                    before_value = 1):
-
-    combi = dataset_name, tf_name # Create this tuple to match the format of the other code
-
-    curr_dataset = combi[0] 
-    curr_tf = combi[1] 
-
-    # get id in list of the dataset and tf
-    curr_dataset_id = all_datasets.index(curr_dataset)
-    curr_tf_id = all__tfs.index(curr_tf)
-
-    # Create an empty CRM with a peak only for this combi
-    x = np.zeros((crm_length, len(all_datasets), len(all_tfs)))
-    x[:,curr_dataset_id, curr_tf_id] = before_value
-    x[:,:, curr_tf_id] += 0.1*before_value
-    x[:,curr_dataset_id, :] += 0.1*before_value
-
-    # See what the model rebuilds
-    xp = utils.squish(x, factor = squish_factor)
-    xp2 = xp[np.newaxis, ..., np.newaxis]
-    prediction = model.predict(xp2)[0,:,:,:,0]
-    prediction_2d = np.mean(prediction, axis=0) #
-
-
-    #sns.heatmap(np.mean(x, axis=0).transpose())
-
-    # The plot we want
-    plt.figure(figsize = (6,5)); sns.heatmap(np.transpose(prediction_2d),
-        annot=True, cmap = 'Greens',
-        xticklabels = all_datasets, yticklabels = all_tfs, fmt = '.2f')
-
-
-"""
-Much like pairs, do in the yaml a section for which ones this should be applied to, like this :
-
-estimate_corr_group_for:
-    - GEO12345, TAL1
-    - GEO11111, BFC4
-
-
-
-for combi in parameters['estimate_corr_group_for']:
-    dataset, tf = combi
-    fig = estimate_corr_group_for_combi(dataset, tf)
-    fig.savefig(the_output_path)
-
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Get some samples (3D tensor representations of CRMs, like, 200*48 or something)
+# This is used MANY times in the code, for Q-score, many diagnostics, and
+# abundance, normalization, etc.
+list_of_many_crms = er.get_some_crms(train_generator,
+    nb_of_batches_to_generate = parameters['nb_batches_generator_for_diag_list_of_many_crms'])
 
 
 
@@ -448,75 +310,50 @@ for combi in parameters['estimate_corr_group_for']:
 eval_figsize_small = (5,5)
 eval_figsize_large = (8,5)
 
-# Perform some diagnosis on the model, only if the config flag is true.
-# Notably, uselsss when reloading a model
-# CAN BE RUN WITH BOTH TRUE AND ARTIFICIAL OF COURSe, but mostly meant for artifical
+# Perform some diagnosis on the model. Only if the `perform_model_diagnosis` 
+# flag in the parameters is True.
+# Notably, it might be redundant when reloading a model.
 if parameters['perform_model_diagnosis']:
 
     # ------------------------------ Evaluation ------------------------------ #
-    """
-    Explain that most of this part is meant to be run in a Jupyter Kernel
-    And that the plots will likely not display in a standard python console
+    # Plot some examples of CRMs, their reconstructions and anomaly scores.
+    
+    i = 0
 
-    TO USE IT : set NB_EXAMPLES_TO_DISPLAY higher than 0 !
-    """
-
-    # TODO : maybe make this draw 20 examples and produce an evaluation pdf with those figures
-
-    NB_EXAMPLES_TO_DISPLAY = 0
-
-    for i in range(NB_EXAMPLES_TO_DISPLAY):
+    for _ in range(parameters["example_nb_batches"]):
 
         # Data
         before_batch = next(train_generator)[0]
 
-        for ID in range(len(before_batch)):
+        for n in range(len(before_batch)):
 
-            #before_batch = next(train_generator)[0]
+            before_raw = np.copy(before_batch[n,:,:,:,0])
 
-            #
-            #ID = 8
-
-            before_raw = np.copy(before_batch[ID,:,:,:,0])
-
-            # before_raw[:,5:,:]=0   # REMOVE WATERMAR FOR TEST
-            # before_raw[:,:,5:]=0   # REMOVE WATERMAR FOR TEST
-            # before_raw[:,:3,:]=0   # REMOVE WATERMAR FOR TEST
-
-            before = np.around(before_raw-0.11) # Remove crumbing if applicable
+            before = np.around(before_raw-0.11) # Remove crumbing if applicable TODO Make this more rigorous
             prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
 
-            # 2D - mean NO IT IS MAX along region axis
+            # 2D - max along region axis
             before_2d = np.max(before, axis=0)
-            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
+            plt.figure(figsize=eval_figsize_small); before_2d_plot = sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
             prediction_2d = np.max(prediction, axis=0)
-            plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
+            plt.figure(figsize=eval_figsize_small); prediction_2d_plot = sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
 
-            #utils.plot_3d_matrix(before_raw)
-
-
-            #plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
-            # # FLIPPED
-            # before_raw = np.flip(before_raw, axis = -1)
-            # before = np.around(before_raw-0.11)
-            # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-            # prediction_2d = np.max(prediction, axis=0)
-            # plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens')
-
-            utils.plot_3d_matrix(before, figsize=eval_figsize_large)
-            clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
-            utils.plot_3d_matrix(clipped_pred, figsize=eval_figsize_large)
-
-            # prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-            # clipped_pred = np.around(np.clip(prediction-0.1,0,999), decimals=1)
+            # utils.plot_3d_matrix(before, figsize=eval_figsize_large)
+            # clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
             # utils.plot_3d_matrix(clipped_pred, figsize=eval_figsize_large)
 
             anomaly_matrix = er.anomaly(before, prediction)
-            utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
+            anomaly_plot = utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
 
-            """
-            TODO should save some of those
-            """
+
+            # Save the figures 
+            before_2d_plot.get_figure().savefig(plot_output_path + "example_crm_before_2dmax_"+i+".pdf")
+            prediction_2d_plot.get_figure().savefig(plot_output_path + "example_crm_rebuilt_2dmax_"+i+".pdf")
+            anomaly_plot.savefig(plot_output_path + "example_crm_anomaly_"+i+".pdf")
+
+            i = i+1 # Increment counter
+
+
 
 
 
@@ -527,32 +364,19 @@ if parameters['perform_model_diagnosis']:
     summed_anomalies = []
     summed_befores = []
 
-    # TODO : MAKE THAT A PARAMETER !
-    # Should still be high to compensate for batch effects ! careful about interpretation !
+    # Should use many samples to compensate for batch effects
+    for before in list_of_many_crms:
 
+        # Data
+        summed_before = np.max(before, axis = 0)
+        summed_befores += [summed_before]
 
-    """
-    STOP ! USE list_of_many_crms DIRECTLY INSTEAD OF SUMMED_BEFORES !!!!!!!
-    """
-    for i in range(300):
+        # Prediction
+        prediction = model.predict(before[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+        anomaly_matrix = er.anomaly(before, prediction)
 
-        before_batch = next(train_generator)[0]
-
-        for k in range(before_batch.shape[0]):
-
-            # Get max across X axis to transpose back in 2D
-
-            # Data
-            before = before_batch[k,:,:,:,0]
-            summed_before = np.max(before, axis = 0)
-            summed_befores += [summed_before]
-
-            # Prediction
-            prediction = model.predict(before[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-            anomaly_matrix = er.anomaly(before, prediction)
-
-            summed_anomaly = np.max(anomaly_matrix, axis = 0)
-            summed_anomalies += [summed_anomaly]
+        summed_anomaly = np.max(anomaly_matrix, axis = 0)
+        summed_anomalies += [summed_anomaly]
 
 
     # Do not consider the zeros where a peak was not placed, only the peaks and the rebuilt peaks
@@ -562,9 +386,7 @@ if parameters['perform_model_diagnosis']:
 
     anomaly_values = np.ma.masked_equal(summed_anomalies, 0)
     median_anomaly_values = np.ma.median(anomaly_values, axis=0)
-    median_anomaly_values_plot = sns.heatmap(median_anomaly_values, annot = True).get_figure()
-
-
+    plt.figure(figsize=eval_figsize_small); median_anomaly_values_plot = sns.heatmap(median_anomaly_values, annot = True).get_figure()
 
     # Save this as a diagnostic plot
     median_anomaly_values_plot.savefig(plot_output_path+'median_anomaly_values.pdf')
@@ -578,68 +400,25 @@ if parameters['perform_model_diagnosis']:
 
     # ------------------------------ Q-score evaluation --------------------------- #
     # VERY IMPORTANT TALK ABOUT THIS MORE
-    # Main idea : the model should give different score in alone+both when there is
+    # For each {A,B} pair of sources (TR+dataset pairs, the model should give 
+    # a different score to A alone than when B is present *only* when there is
     # actually a correlation. If not, if either learned too little (not identified)
     # the group) or too much (too precise). Conversely if there is no correlation
     # the presence of one should have no impact on the other.
 
-
-
-    """
-    corrs = [0.1,0.1,0.8,0.8]
-    pvals = [0.5,1E-100,1E-100,0.5]
-    [10**(1+r) for r in corrs]
-    [-np.log10(p) for p in pvals]
-
-    import numpy as np
-    def qscore(r,p):
-        # Sort of a logical AND : if there is a correlation, there should be
-        # a differnce in the score.
-
-        # Correlation term
-        C = 10**(1+r)
-        # Mean diffrence term
-        S = -np.log10(p)
-
-        # We expect S to be from 0 to 100 roughly ?
-
-        diff = C-S
-
-        # The score should be high when the difference is low so use a decreasing function
-        return diff
-
-
-    scores = [qscore(r,p) for r,p in zip(corrs, pvals)]
-
-    scores
-
-
-    """
-
     print("Beginning Q-score evaluation. Can be long...")
 
-    # TODO make nb_of_batches_to_generate a parameter in yaml for evaluation !!
-    # TODO THIS IS CRITICAL BEAUSE IT CAN TAKE VERY LONG FOR THE HIGH DIMENSION REAL DATA !!!
-
-    q, qscore_plot, corr_plot, posvar_x_res_plot = er.calculate_q_score(model, train_generator,
-        nb_of_batches_to_generate = 200)
-    """
-    IMPORTANT TODO : I should directly pass a list_of_many_crms precalculated. Because I use it in many parts of the code.
-    """
-
-
-
+    q, qscore_plot, corr_plot, posvar_x_res_plot = er.calculate_q_score(model,
+        list_of_many_befores = list_of_many_crms)
 
     # Final q-score (total sum)
     print("-- Total Q-score of the model (lower is better) : "+ str(np.sum(np.sum(q))))
 
-    # TODO SAVE THE ABOVE PLOTS, AND MAYBE EVEN SAVE THE ENTIRE Q MATRIX IN A TXT !!!!! This way Q-score value can be recalculated externally
-
-    """
-    Add explanation of those plots, and say that in those, in terms of axis X and Y, those are you have datasets THEN Tfs. (ie. first datasets 1 to i and THEN TFs 1 to j)
-    SAME FOR THE Q-SCORE MATRIX !
-    """
-
+    # Those plots give respectively the Q-score contribution of each pair 
+    # (lower is better), the true correlation matrix for comparison, and
+    # the third plot says whether the presence of both results in a change in 
+    # score and should "look like" the correlation plot. In terms of axis X and
+    # Y, you have datasets THEN Tfs. (ie. first datasets 1 to i and THEN TFs 1 to j)
     qscore_plot.savefig(plot_output_path+'qscore_plot.pdf')
     corr_plot.savefig(plot_output_path+'corr_plot_datasets_then_tf.pdf')
     posvar_x_res_plot.savefig(plot_output_path+'posvar_when_both_present_plot_datasets_then_tf.pdf')
@@ -652,13 +431,15 @@ if parameters['perform_model_diagnosis']:
 
 
 
-    """
-    LAUNCH THIS ON SACAPUS MASSIVELY, ALONG WITH THE CREATION OF THE OTHER CELL LINES, WITH A MAXIMUM OF CORES
-    """
+
+
+
+
+
+
 
     """
     ######### WIP Grid search part
-    # Put it in a commented block only
 
     # Read the yaml parameters to get a default parameters
 
@@ -690,71 +471,58 @@ if parameters['perform_model_diagnosis']:
 
     # ------------------------------ Visualize filters --------------------------- #
 
-
     # Visualize filters
-    FILTERS_TO_PLOT_MAX = 0
 
-    """
-    TODO : TO USE IT, SET FILTERS_TO_PLOT_MAX higher than 0 !!
-    """
-
-    # Again, meant to be run in a Jupyter Kernel, not really as a script !
+    # This was illuminating when calibrating the parameters and making sure the 
+    # model was learning, but I have not found it otherwise to be particularly
+    # useful.
 
     # Datasets
     w = model.layers[2].get_weights()[0]
-    for filter_nb in range(w.shape[-1])[0:FILTERS_TO_PLOT_MAX] :
-        sns.heatmap(w[:,:,0,0,filter_nb]) ; plt.figure()
+    for filter_nb in range(w.shape[-1]):
+        plt.figure(figsize=eval_figsize_small); dfp = sns.heatmap(w[:,:,0,0,filter_nb])
         #utils.plot_3d_matrix(w[:,:,:,0,filter_nb], figsize=(6,4))
-
+        dfp.get_figure().savefig(plot_output_path + "conv_kernel_datasets_"+filter_nb+".pdf")
+    
     # TFs
     w = model.layers[5].get_weights()[0]
-    for filter_nb in range(w.shape[-1])[0:FILTERS_TO_PLOT_MAX] :
-        #utils.plot_3d_matrix(w[:,0,:,:,filter_nb], figsize=(6,4)) ; plt.figure()
-        sns.heatmap(w[0,0,:,:,filter_nb]) ; plt.figure() # 2d version only at the first X (often the same anyways)
-
+    for filter_nb in range(w.shape[-1]):
+        #utils.plot_3d_matrix(w[:,0,:,:,filter_nb], figsize=(6,4))
+        plt.figure(figsize=eval_figsize_small); tfp = sns.heatmap(w[0,0,:,:,filter_nb]) # 2D version only at the first X (often the same anyways)
+        dfp.get_figure().savefig(plot_output_path + "conv_kernel_tf_x0_"+filter_nb+".pdf")
 
     # ----------------------- Visualize encoded representation ------------------- #
 
-    # I added some Y and Z blur, just to smooth it a little. KEEP THE BLUR MINIMAL AS IT DOES NOKE MAKE SENSE
+    # I added some Y and Z blur, just to smooth it a little. Keep the blur minimal, makes no sense otherwise. 
 
     ENCODED_LAYER_NUMBER = 15 # Starts at 0 I think
 
     # To check this is the correct number:
     print(model.layers[ENCODED_LAYER_NUMBER].name == 'encoded')
-    # TODO replace with something like model.get_layer("encoded")
+    # TODO Replace with something like model.get_layer("encoded")
 
 
-
-    # TODO RENAME UREXAMPLES, IT's MORE AKIN TO ATTENTION
     urexamples = cp.compute_max_activating_example_across_layer(model, random_state = 42,
                                 selected_layer = ENCODED_LAYER_NUMBER, output_of_layer_select_this_dim = 2,
-                                #learning_rate = 0.25, nb_steps_gradient_ascent = 250,
                                 learning_rate = 1, nb_steps_gradient_ascent = 50,
                                 blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5)
 
-    UREXAMPLES_TO_PLOT = 100
-
-    #for exid in range(len(urexamples)):
-    for exid in range(UREXAMPLES_TO_PLOT):
+    for exid in range(len(urexamples)):
         ex = urexamples[exid]
         ex = ex[...,0]
         #ex = np.around(ex/np.max(ex), decimals = 1)
         x = np.mean(ex, axis = 0)
-        plt.figure(figsize=eval_figsize_small); sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0)
+        plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0)
+        urfig.get_figure().savefig(plot_output_path + "urexample_dim_"+exid+".pdf")
 
 
-    # Move this somewhere else.
-
-
+    """
     # Get an encoded representation for comparison (from the latest `before`, from above)
     tmp = cp.get_encoded_representation(before[np.newaxis,...,np.newaxis], model)
     tmpd = np.transpose(tmp[0]**2)
-
     plt.figure(figsize=eval_figsize_large); sns.heatmap(tmpd)
     utils.plot_3d_matrix(before)
-
-
-
+    """
 
 
 
@@ -778,7 +546,6 @@ if parameters['perform_model_diagnosis']:
                         signal = True, noise=True, ones_only = parameters['artificial_ones_only'], return_separately = True)
 
 
-        # ADD EXPLANATION FOR N_ITER
         # Should take roughly one or two minutes
         arti_start = time.time()
         df, separated_peaks = er.proof_artificial(model, mypartial,
@@ -789,14 +556,11 @@ if parameters['perform_model_diagnosis']:
 
 
         # The plots
-        # TODO : use geom_boxplot or geom_violin ?
         a = ggplot(df, aes(x="type", y="rebuilt_value", fill="tf_group"))
         a1 = a + geom_violin(position=position_dodge(1), width=1)
         a2 = a + geom_boxplot(position=position_dodge(1), width=0.5)
         b = ggplot(df, aes(x="brothers", y="rebuilt_value", group="brothers")) + scale_fill_grey() + geom_boxplot(width = 0.4)
 
-
-        # Save them
         a2.save(filename = plot_output_path+'artifical_data_systematisation_value_per_type.png', height=10, width=14, units = 'in', dpi=3200)
         b.save(filename = plot_output_path+'artifical_data_systematisation_value_per_brothers.png', height=10, width=14, units = 'in', dpi=3200)
 
@@ -840,9 +604,19 @@ else:
 
         # Filepaths
         root_output_bed_path = root_path + '/data/output/bed/' + parameters['cell_line']
+        
+
         output_bed_path = root_output_bed_path + ".bed"
-        output_bed_path_normalized_poub = root_output_bed_path + "_raw_normalized_by_tf_DEBUG.bed"
         output_bed_merged = root_output_bed_path + "_merged_doublons.bed"
+
+
+
+
+        # WHAT IS THAT AGAIN ?
+        output_bed_path_normalized_poub = root_output_bed_path + "_raw_normalized_by_tf_DEBUG.bed"
+        
+
+
         output_path_corr_group_normalized = root_output_bed_path + "_merged_doublons_normalized_corr_group.bed"
         output_bed_path_final = root_output_bed_path + "_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
 
@@ -863,7 +637,7 @@ else:
 
 
 
-        
+
 
 
 
@@ -872,26 +646,12 @@ else:
         utils.print_merge_doublons(bedfilepath = output_bed_path, outputpath = output_bed_merged)
 
 
-        """
-        # DEBUG TEST TIME
-        import importlib
-        importlib.reload(er)
-        import time
-        s = time.time()
-        er.produce_result_file(all_matrices[0:10], output_bed_path+'.tmp.poubtest',
-            model, get_matrix, parameters, datasets_clean, cl_tfs, thread_nb = 1)
-        e = time.time()
-        print('\n', e-s, 'sec')
-        """
-
-
-
         # --------- Normalization ----------
 
 
         # For reference, get the scores per tf and per dataset for the RAW data, before normalization
-        # scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_merged,
-        #     cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub)
+        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_bed_merged,
+            cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub)
 
 
 
@@ -899,7 +659,7 @@ else:
 
         """
         CAREFUL, AT TIME OF WRITING THIS I OVERWRITE scores_by_tf_df AND scores_by_dataset_df LATER. DECIDE WHICH ONE TO OUTPUT.
-        The last one I think ? Adter my normalization ?
+        The last one I think ? After my normalization ?
 
         Or I can just keep both and print both...
         """
@@ -913,57 +673,38 @@ else:
 
         # Estimate corr group scaling factors
         corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(model = model,
-            all_datasets = datasets, all_tfs = cl_tfs, list_of_many_crms = list_of_many_crms,
+            all_datasets = datasets_clean, all_tfs = cl_tfs, list_of_many_crms = list_of_many_crms,
             crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
             outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.txt")
 
-
-
-
-
+        # Apply 
         utils.normalize_result_file_with_coefs_dict(output_bed_merged,
             corr_group_scaling_factor_dict, cl_name = parameters['cell_line'],
             outfilepath = output_path_corr_group_normalized)
 
 
-        ### Then Normalize the score by TF,
-
+        ### Then, finally normalize the score by TF, under the assumption that no TF is better than another.
         scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_path_corr_group_normalized,
             cl_name = parameters['cell_line'], outfilepath = output_bed_path_final)
 
 
 
-        # A new result file labeled _normalized has been produced.
+        # A new result file labeled "FINAL" has been produced.
         print('Processing complete.')
-
-        #!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!
-        # TODO ALSO SAY SO  : THIS NORMALIZED FILE IS THE ONE YOU WANT !!!!!!!!!! WELL BOTH ACTUALLY
-        #!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!#!!!!!!!!!!!!!!!
-
-
-
-
 
 
 
         # ----------------------------- Diagnostic plots ----------------------------- #
 
-        """
-        TODO : does all the below require what is above ? maybe some stuff could be conditioned on perform_diagnosis ?
-        """
         if parameters['perform_real_data_diagnosis']:
 
+            print('Performing diagnostic plots...')
 
-            """
-            TODO : should I condition all of this on parameters['perform_diagnosis'] ??
-            """
-
-            # Only if not artificial data
+            # Only if not artificial data.
             # TODO : those could be useful in artificial as well
 
 
             # -------- Normalization of score by TF
-            # TO CHECK : these plots give info from before the normalization no ?
 
             # By TF
             fig, ax = plt.subplots(figsize=(10, 8))
@@ -981,7 +722,6 @@ else:
 
 
 
-            # TODO MAYBE Remove the dataset plot since we don't normalize by dataset
 
 
             # ------ Informative plots for result checking
@@ -993,9 +733,6 @@ else:
             # -Including : Compare to the average CRM
             # Produce a picture of the average CRM for later comparisons
 
-
-
-
             # TODO : THOSE ARE MAYBE ALREADY CALCULATED BY THE Q-SCORE. MERGE THIS CODE WITH THE Q-SCORE CODE TO AVOID REDUNDANCIES ?
 
 
@@ -1003,43 +740,9 @@ else:
 
             average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
 
-            # summed = np.mean(before, axis=0)
-            # fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
-            #
-            # summed = np.mean(clipped_pred, axis=0)
-            # average_rebuilt_crm_fig, ax = plt.subplots(figsize=(8,8)); sns.heatmap(np.transpose(summed), ax=ax)
-
-
             """
             # Careful : some horizontal "ghosting" might be due to summed crumbing. TODO NOTE IN PAPER !!!!
             """
-
-            """
-            SAVE THE ABOVE FIGS SHOMEWHERE
-            """
-
-
-            #
-            # max = np.zeros((1,12))
-            # N = 1
-            # for i in range(N):
-            #     current_max = np.max(next(train_generator)[0][0,:,:,:,0], axis=1)
-            #     current_max.shape
-            #     max = np.concatenate([max,current_max])
-            #
-            # # Sum, Remove crumbs and reshape
-            # sm = (np.sum(max,axis=0) - 0.1*N).reshape((max.shape[1],1))
-            # fig, ax = plt.subplots(figsize=(10,1)) ; sns.heatmap(np.transpose(sm) / sum(sm), fmt='.0%', annot = True, cmap = 'Reds') # Numbers
-            #
-            # # Try a correlation matrix instead
-            # max_df = pd.DataFrame(max)
-            # fig, ax = plt.subplots(figsize=(10,10)) ; sns.heatmap(max_df.corr(), fmt = '.2f', annot=True, ax=ax)
-
-            # WARNING : the matrix does the have the datasets in the same order as the variable 'datasets', we saw that when trying to look them up with Jeanne. Fix it.
-
-
-
-
             average_crm_fig.savefig(plot_output_path+'average_crm.pdf')
             tf_corr_fig.savefig(plot_output_path+'tf_corr.pdf')
             dataset_corr_fig.savefig(plot_output_path+'dataset_corr.pdf')
@@ -1050,13 +753,14 @@ else:
 
 
             # ----------------------- Scores per CRM  ------------------------- #
+            # Computing score distribution per number of peaks in CRMs
 
             # VERY IMPORTANT PLOTS
 
-            print('Computing score distribution per number of peaks in CRMs...')
+            
 
-            # TODO the CRM file path should be a parameter in the YAML, it is hardcoded for now
-            CRM_FILE = './data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed'
+            # The CRM file path
+            CRM_FILE = parameters["CRM_FILE"] 
 
 
 
@@ -1069,9 +773,9 @@ else:
 
 
 
-            # REDO THIS ON NORMALIZED FILE
+            # REDO THIS ON NORMALIZED FINAL FILE
             print("... in the normalized file ...")
-            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_normalized, CRM_FILE)
+            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_final, CRM_FILE)
             score_distrib_tfnorm.save(plot_output_path+'score_distribution_TFNORM.pdf')
             avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_TFNORM.pdf')
             max_score_crm_tfnorm.save(plot_output_path+'max_score_per_crm_density_TFNORM.pdf')
@@ -1090,41 +794,6 @@ else:
 
 
 
-
-
-
-
-
-
-
-
-
-            crm_file_path = "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
-            # TODO UNHARDCODE THE CRM FILE PATH OF AT LEAST PUT IT AT THE BEGINNING !!!!!
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             tfs_to_plot = parameters['tf_pairs']
 
             for pair in tfs_to_plot:
@@ -1136,3 +805,19 @@ else:
                 except:
                     print("Error fetching the pair : "+str(pair))
                     print("Ignoring.")
+
+
+
+            # ----- Correlation group estimation
+            # Try to estimate the correlation groups learned by the model for certain select sources (TF+dataset pair) by looking at what kind of phantoms are added by the model
+
+            for combi in parameters['estimate_corr_group_for']:
+
+                dataset, tf = combi
+                
+                output_path_estimation = plot_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
+                
+                fig = er.estimate_corr_group_for_combi(dataset, tf,
+                    all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
+                    crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
+                fig.get_figure().savefig(output_path_estimation)

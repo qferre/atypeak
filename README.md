@@ -49,7 +49,7 @@ Set load_saved_model and process_full_real_data to False, so you will train a mo
 
 - Once you run the script once, you will have a trained model names trained_{cell_line}_model.h5 ; this way you can now activate use_trained_model in the parameters in the yaml.
 
-This will also produce q-score and other diagnostics plots and info in the output directory.
+This will also produce q-score and other diagnostics plots and info in the output directory (presumably if you relaod a model, you have already diagnosed it and can set perform_model_diagnosis to False).
 
 Look at the diagnostic plots : MOST NOTABLY look at some examples of rebuit CRMS (TODO MAKE THOSE BE PRINTED) to see if there are enough corr groups, and look at the q-score (see paper)
 
@@ -66,10 +66,7 @@ Once satisfied, set those two parameters (load_saved_model and process_full_real
 
 
 
-
-
 Outputs are named according to the cell line, so you can just re-run with a different cell line in parameters.yaml and not overwrite your data. the models are also saved according to this paradigm
-
 
 
 
@@ -78,6 +75,11 @@ Outputs are named according to the cell line, so you can just re-run with a diff
 ### Data format
 
 If you replace the provided data in ./data/input_raw with your own data, please use the following format :
+
+And remember to replace the parameters :
+CRM_FILE and
+PEAKS_FILE in the Makefile
+and CRM_FILE in the YAML
 
 #### CRM file
 
@@ -115,6 +117,12 @@ Explain the contents
 - bed contains the result files, and tsvs of scores
 
 EXPLAIN THE SIGNIFICATION OF THE VARIOUS BEDS
+
+The output bed files are named according to whether they had normalization applied or not. For most use cases, use the BED file wieh "FINAL" in the filename which contains all normalizations.
+
+All output bed FILES have the following format :
+chr    start   end    dataset.tf.cell_line    atypeak_score   strand
+
 
 The one you want is "{cell_line}_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
 

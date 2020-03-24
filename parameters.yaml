@@ -2,19 +2,18 @@
 # Results are done by cell line and will go in the appropriate directory.
 cell_line: "hela"
 
-#
-
 # ---------------------------- Execution ------------------------------------- #
 
 #### Model
 
-# If true, you will use only artificial data. Useful for demonstration.
+# If true, you will use only artificial data.
+# Used to demonstrate the model's capability to learn correlation groups.
 use_artificial_data: False
 
 # If you have already trained a model, set this to True (models are saved automatically when trained)
 load_saved_model: False
 
-# If reloading a known model, you may want to set this to false and skip the diangnosis steps (q-score, etc.)
+# If reloading a known model, you may want to set this to False and skip the diagnosis steps (Q-score, etc.)
 perform_model_diagnosis: True
 
 #### Data processing
@@ -88,7 +87,29 @@ artificial_watermark_prob: 0.75
 # Core parameter : used all across the program, including in training !
 random_seed: 42
 
-# Distribution of scores depending on TF presence pairs to visualize
+
+
+
+# Several diagnostic steps are done only on a randomized subset of CRMs ; the subset is generated one.
+# This parameter betermines how many batches are drawn to geenrate the subset
+nb_batches_generator_for_diag_list_of_many_crms: 200
+# This is criticial, because it can take a very long time for high-dimensional data
+
+
+
+
+# Path to the CRM file. Should have the same value than in the Makefile.
+CRM_FILE: "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
+
+
+
+# Get some examples of CRMs' representations and rebuilding by the models. Number of batches to be given as example.
+example_nb_batches: 1
+
+
+
+## Distribution of scores depending on TF presence.
+# Gives the [A, B] pairs to visualize whether the presence of one affects the score of the other
 # Only used in real data, not artificial
 
 # FOR JURKAT
@@ -115,3 +136,15 @@ tf_pairs:
 #   - ["irf1","atf1"]
 #   - ["ctcf","jun"]
 #   - ["gata1","gata2"]
+
+
+
+## Correlation group estimation
+# By looking at what kinds of phantoms are added, estimate the correlation groups learned by the model for the following sources
+# Each line should contain a source, which is a {dataset, TF} pair given in that order below
+
+# FOR HELA
+estimate_corr_group_for:
+    - ['GSE40632','aff4']
+    - ['GSE45441','sfmbt1']
+    - ['GSE22478','phf8']

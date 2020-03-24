@@ -13,6 +13,11 @@ import itertools
 import pybedtools
 import numpy as np
 import pandas as pd
+import scipy.stats
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 
 from plotnine import ggplot, aes, geom_histogram, scale_fill_grey, geom_violin, geom_boxplot, position_dodge, theme
 
@@ -36,36 +41,21 @@ def anomaly(before, prediction):
     Note : this is all designed to work with scores, but for now the peaks all have scores of 1 when present.
     """
 
-    # TODO return the un-crumbed matrix for use as a mask
-    # NOTE : not needed if I dont visualize it, since in the denoising I will query the values based on the original peaks coordinates anyways.
-    # Here is a temporary hotfix, it will stop working when we have values besides 0 and 1 !!
-    #mask = np.clip(np.around(before),0,1)
+    # TODO Return the un-crumbed matrix for use as a mask ? Not needed if I don't visualize it, since I query the values based on the original peaks coordinates
+    # Here is a temporary hotfix that removes all values below 0.1
+    # It will stop working when we have values besides real peak values below 0.1 (or higher than 1) !!
     mask = np.clip(np.around(before, decimals = 1),0,1)
     mask[ mask !=0 ] = 1 # This is 0 where there is no peak, and 1 where there is one
 
 
-
-
-
-    # Anomaly score computation
+    ## Anomaly score computation
     anomaly = 1 - ((before+1E-100) - prediction)/(before+1E-100)
-    # WARNING this considers higher plotting as an anomaly ! We want mostly the cases where the prediction is lower ! WAIT Is that not fixed by using "1 - (before - prediction)" and no squares ?
-    # Yeah now it's okay, if prediction > before then anomaly > 1
-    # Divide by before, otherwise when peaks with low scores are discarded before-prediction is small so 1 - before-prediction is high...
+    # WARNING this considers higher plotting as an anomaly ! We want mostly
+    # Divide by before, otherwise when peaks with low scores are discarded. Not useful now since before is always 1, but future-proofing.
 
-
-
-
-    # IMPORTANT NEW : NO LONGER CLIP ANOMALY AT 1. ANOMALY CAN BE ABOVE 1 IF IT WAS REBUILT WITH A HIGHER VALUE
-    # THAT HAPPENS FOR SOME REASON IN CERTAIN CORRELATION GROUPS. That's why we normalize by TF later !
-    anomaly = np.clip(anomaly, 1/1000, np.inf) # Do not clip at 0 or it will not be plotted
+    anomaly = np.clip(anomaly, 1E-5, np.inf) # Do not clip at 0 or it will not be plotted
 
     return anomaly * mask
-
-
-
-
-
 
 
 
@@ -87,33 +77,27 @@ def produce_result_file(all_matrices, output_path, model,
 
 
 
-
-
     def produce_result_for_matrix(m):
         """
         Wrapper to produce a result for one matrix. Used in the main loop.
         """
-        # TODO : maybe add the possibility to supply a custom generator ?
+        # TODO Maybe add the possibility to supply a custom generator ?
 
         # Collect original matrix and lines
         current_matrix, origin_data_file, crm_start = get_matrix_method(m, return_data_lines = True)
 
         # Pad the matrix (much like we do in model_atypeak.generator_unsparse)
-        # TODO this will no longer be required once the padding will have been moved to the get_matrix() method itself
         # TODO The method must also return crm_length then for coordinate correction !
         crm_length = current_matrix.shape[0]
-        current_matrix_padded = np.pad(current_matrix,pad_width = ((parameters["pad_to"] - current_matrix.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0)
-        #utils.plot_3d_matrix(current_matrix_padded)
-
+        current_matrix_padded = np.pad(current_matrix, pad_width = ((parameters["pad_to"] - current_matrix.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0)
+ 
         # Compute result and anomaly
         squished_matrix = utils.squish(current_matrix_padded[:,:,:,np.newaxis])
         prediction = model.predict(squished_matrix[np.newaxis,:,:,:,:])
         result_matrix = utils.stretch(prediction[0,:,:,:,:])
-        #utils.plot_3d_matrix(np.clip(np.around(result_matrix[:,:,:,0]-0.1, decimals = 1),0,1))
 
         # This uses directly the anomaly function defined in this file
         anomaly_matrix = anomaly(current_matrix_padded, result_matrix[:,:,:,0])
-        #utils.plot_3d_matrix(anomaly_matrix)
 
         # Now write to the result BED the current peaks with their newfound anomaly score
         result = utils.produce_result_bed(origin_data_file, anomaly_matrix,
@@ -122,17 +106,17 @@ def produce_result_file(all_matrices, output_path, model,
                                             debug_print = False)
 
 
-        # WARNING : This is 1- anomaly, so the score is actually high for good peaks !!
+        # WARNING : This is 1 - anomaly, so the score is actually high for good peaks !!
         return result
 
 
 
-
-    cnt = 0
+    ## Main loop iterating over all matrices
     result = list()
 
     print('Beginning processing...')
 
+    cnt = 0
     for m in all_matrices:
 
         result += produce_result_for_matrix(m)
@@ -142,31 +126,10 @@ def produce_result_file(all_matrices, output_path, model,
         sys.stdout.flush()
         cnt += 1
 
-
-
-    for line in result :
-        rf.write(line+'\n')
-
+    # Write the final file
+    for line in result: rf.write(line+'\n')
     rf.close()
     print(" -- Done.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -181,7 +144,10 @@ def produce_result_file(all_matrices, output_path, model,
 # -------------- Corr group and biais correction/normalization --------------- #
 ################################################################################
 
-def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list_of_many_crms, outfilepath, crm_length=3200, squish_factor = 10):
+def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, 
+    list_of_many_crms, outfilepath,
+    crm_length = 3200, squish_factor = 10,
+    use_crumbing = True):
     """
     Estimates the corr group for each dataset+tf pair by looking at the added phantoms
 
@@ -194,8 +160,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
     See code comments for details
 
     Returns a dictionary of scaling factors to be applied compensating for model biais
-
-
     """
 
     coefs_norm = dict()
@@ -203,40 +167,20 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
     # All possible combinations
     all_combis = list(itertools.product(all_datasets, all_tfs))
 
-
-
-
-
     # Take the average CRM 2d and repeat it across X axis
     average_crm = np.mean(np.array(list_of_many_crms), axis=0)
-    #average_crm = pd.DataFrame(np.transpose(average_crm), index = all_tfs, columns = all_datasets)
     average_crm_2d = np.mean(average_crm, axis = 0)
-
-    # # HELA debug combis
-    # all_combis = [
-    #     ('GSE40632','aff4'),
-    #     ('GSE40632','ell2'),
-    #     ('GSE45441','rcor1'),
-    #     ('GSE45441','sfmbt1'),
-    #     ('GSE22478','phf8'),
-    #     ('GSE22478','e2f1'),
-    #     ('GSE51633','brd4'),
-    #     ('GSE39263','znf143'),
-    #     ('GSE31417','znf143'),
-    #     ('GSE31417','yy1'),
-    #     ('GSE31417','gabpa'),
-    #     ('GSE44672','myc')
-    # ]
-
-
 
 
     for combi in all_combis:
 
 
 
-        crumb=True # TODO MAKE IT A PARAMETER
+
         BEFORE_VALUE = 1 # Careful about affine effect. Write somewhere.
+
+
+
 
         # Combi information
         curr_dataset = combi[0] # get id in list of the dataset
@@ -252,24 +196,20 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
         # See the maximum score reached by each : they should be "100%" (ie. perfect score, equal to BEFORE with crumbing), if more or less there is bias to be corrected
         full_crm = (average_crm_2d>0).astype(int)
         full_crm_3d = np.stack([full_crm]*320, axis=0).astype('float64')
-        full_crm_3d_crumbed = cp.look_here_stupid(full_crm_3d)
-        #utils.plot_3d_matrix(full_crm_3d_crumbed)
-        predictionf= model.predict(full_crm_3d_crumbed[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-        prediction_2df = np.mean(predictionf, axis=0) # 2D - mean along region axis
-        before_2df = np.mean(full_crm_3d_crumbed, axis=0)
-        #plt.figure(); sns.heatmap(np.transpose(before_2df), annot=True, fmt = '.3f')
-        #plt.figure(); sns.heatmap(np.transpose(prediction_2df), annot=True, fmt = '.3f')
+        if use_crumbing: full_crm_3d = cp.look_here_stupid(full_crm_3d)
 
+        predictionf= model.predict(full_crm_3d[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+        prediction_2df = np.mean(predictionf, axis=0) # 2D - mean along region axis
+        before_2df = np.mean(full_crm_3d, axis=0)
 
         # Get the weight
         first_weight = 1/(prediction_2df[curr_dataset_id, curr_tf_id]/before_2df[curr_dataset_id, curr_tf_id])
 
 
 
-
-        # -------------------------- NOW INTER GROUP BIAS
+        # -------------------------- INTER GROUP BIAS
         # Put a peak only for this combi and look at the phantoms
-        # Here, we consider the group itself
+        # Here, we consider the correlation group itself
 
         x = np.zeros((crm_length,len(all_datasets),len(all_tfs))) # Create an empty CRM
 
@@ -278,11 +218,8 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
         # Use a value of 10 or 100 to force MSE to show groups ??
         # No use 1 instead to prevent affine pbs
         x[:,curr_dataset_id, curr_tf_id] = BEFORE_VALUE
-        if crumb: # Add crumbing
-            x = cp.look_here_stupid(x)
-            #x[:,:, curr_tf_id] += 0.1*BEFORE_VALUE
-            #x[:,curr_dataset_id, :] += 0.1*BEFORE_VALUE
-
+        if use_crumbing: x = cp.look_here_stupid(x) # Add crumbing
+            
         xp = utils.squish(x, factor = squish_factor)
         xp2 = xp[np.newaxis, ..., np.newaxis]
         prediction = model.predict(xp2)[0,:,:,:,0]
@@ -291,52 +228,33 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 
         # APPLY THE FIRST WEIGHT and proceed as usual
         prediction_2d = prediction_2d * first_weight
-        # Rq : since I normalize later, this is useless !!!!!
-        # Do it in final : final weight for this combi will be forst_weight * second_weight
+        # Rq : since I normalize later, this is useless !!!!!????
 
 
 
 
         # For ease of understanding, make the average CRM relative to highest abundance
         relative_average_crm_2d = average_crm_2d/np.max(average_crm_2d)
-        #sns.heatmap(np.transpose(relative_average_crm_2d), annot=True, fmt = '.2f')
 
         # Correlation groups reach a rebuilt value of 1 on each peak (hmm after normalizing intra group BE CAREFUL NOTE THIS SOMEWHERE ELSE) when complete, but we
         # need to normalize this by "how complete are they typically"
 
 
         # What would mark this combi as "complete" (value of 1) ?
-        #rebuilt_this = prediction_2d[curr_dataset_id, curr_tf_id]
-        #abundance_this = relative_average_crm_2d[curr_dataset_id, curr_tf_id]
-        #requested_group = prediction_2d*(BEFORE_VALUE/rebuilt_this)
-
         # MODIFIED : instead I normalize the prediction to have a sum of 1
         requested_group = prediction_2d/np.sum(prediction_2d)
 
-        #plt.figure(); sns.heatmap(np.transpose(requested_group), annot=True, cmap = 'Oranges')
 
-
-
-        #utils.plot_3d_matrix(prediction)
-        #utils.plot_3d_matrix(t[0,:,:,:,0])
 
         # # Would it really result in 1 values if fed to the model ?
         # t = model.predict((prediction/rebuilt_this)[np.newaxis,...,np.newaxis])
         # pred_t = np.transpose(np.mean(t[0,:,:,:,0], axis=0))
         # plt.figure(); sns.heatmap(pred_t, annot=True, cmap = 'Greys')
-        # # No it does not...
+        # # No it does not... o remove this line "What would mark this combi as "complete" (value of 1) ?" and keep the line beginnign with "MODIFIED"
 
 
-        # Now
-
-
-        # How complete is it usually ?
+        # How complete is it usually ? To put it another way : how much abundance would that cost ?
         clipped_request = np.clip(requested_group,0,np.inf) # Although it discards negative influences, we need to clip the request to calculate usual completeness
-
-        #sns.heatmap(np.transpose(prediction_2d), annot=True, cmap = 'Oranges')
-        #request_abundance_other_idea = relative_average_crm_2d/clipped_request
-
-        # To put it another way : how much abundance would that cost ?
         request_abundance = relative_average_crm_2d*clipped_request
 
         # Sum only finite
@@ -349,7 +267,11 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
         second_weight = usual_completeness/np.max(request_abundance)
 
 
-        # Finally : final value
+
+
+
+        # ------------- FINAL
+        # Finally : final value is the product of the two weights
         k = first_weight * second_weight
         coefs_norm[combi] = k # Record it
 
@@ -377,72 +299,52 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 
 
 
+def estimate_corr_group_for_combi(dataset_name, tf_name,
+                                    all_datasets, all_tfs, model,
+                                    crm_length, squish_factor,
+                                    before_value = 1):
+    """
+    For a given source (dataset_name, tf_name) will estimate the corresponding correlation group
+    This is done by returning simply what happens when the model is asked to rebuild a CRM containing only a peak for the source being considered
+
+    This is simply a portion of the `estimate_corr_group_normalization_factors()` code. 
+    TODO Functionalize it to prevent duplicate code.
+    """
+
+    combi = dataset_name, tf_name # Create this tuple to match the format of the other code
+
+    curr_dataset = combi[0]
+    curr_tf = combi[1]
+
+    # get id in list of the dataset and tf
+    try:
+        curr_dataset_id = all_datasets.index(curr_dataset)
+        curr_tf_id = all_tfs.index(curr_tf)
+    except:
+        print('Dataset or TR specified was not found. Skipping correlation group estimation.')
+        return -1
+
+    # Create an empty CRM with a peak only for this combi
+    x = np.zeros((crm_length, len(all_datasets), len(all_tfs)))
+    x[:,curr_dataset_id, curr_tf_id] = before_value
+    x[:,:, curr_tf_id] += 0.1*before_value
+    x[:,curr_dataset_id, :] += 0.1*before_value
+
+    # See what the model rebuilds
+    xp = utils.squish(x, factor = squish_factor)
+    xp2 = xp[np.newaxis, ..., np.newaxis]
+    prediction = model.predict(xp2)[0,:,:,:,0]
+    prediction_2d = np.mean(prediction, axis=0) #
+
+    # The plot we want
+    plt.figure(figsize = (6,5)); resfig = sns.heatmap(np.transpose(prediction_2d),
+        annot=True, cmap = 'Greens',
+        xticklabels = all_datasets, yticklabels = all_tfs, fmt = '.2f')
+
+    return resfig
 
 
-
-
-#
-#
-# def build_requested_group(model, curr_dataset_id, curr_tf_id,
-#                             nb_steps_gradient_ascent = 200, learning_rate = 0.1):
-#     """
-#     Tries to build a before matrix that would result in the current tf+dataset pair
-#     having a value of 1
-#     """
-#
-#     np.random.seed(42)  # for reproducibility
-#
-#     layer_input = model.layers[0].input
-#     layer_output = model.layers[-1].output
-#
-#
-#     # Loss function
-#     desired_value_along = K.ones(model.input_shape[1])
-#     loss = K.mean(-(layer_output[0,:,curr_dataset_id,curr_tf_id,0] - desired_value_along)**2) - K.mean(layer_output) # Regularize by sum of output
-#
-#     grads = K.gradients(loss, layer_input)[0]   # Compute gradient
-#     grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5) # Normalization trick
-#     iterate = K.function([layer_input, K.learning_phase()], [loss, grads])
-#
-#     # we start from a gray image with some random noise
-#     input_data = np.random.uniform(0, 1, (1,) + model.input_shape[1:])
-#
-#     # Run gradient ascent for n steps
-#     for i in range(nb_steps_gradient_ascent):
-#         loss_value, grads_value = iterate([input_data, 0])
-#         input_data += grads_value * learning_rate
-#
-#
-#     return input_data[0,:,:,:,0], loss_value,
-#
-#
-# request, loss = build_requested_group(model, curr_dataset_id=6, curr_tf_id=9,
-#     nb_steps_gradient_ascent = 100, learning_rate = 0.1)
-# print(loss)
-# sns.heatmap(np.transpose(np.mean(request, axis=0)), annot = True)
-#
-# """
-# GRADIENT PROJECTION and maybe blurring TO PREVENT THIS KIND OF THING
-# """
-#
-# np.mean(request[:,6,9])
-#
-# p = model.predict(request[np.newaxis,...,np.newaxis])
-# sns.heatmap(np.transpose(np.mean(p[0,:,:,:,0], axis=0)), annot = True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ 
 
 
 
@@ -453,46 +355,20 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs, list
 ################################################################################
 
 
-
-
-
-"""
-#########
-
-
-
-
-Put everything related to Q-score here !
-"""
-
-
-
-
-def calculate_q_score(model, generator,
-    nb_of_batches_to_generate):
+def calculate_q_score(model, list_of_many_befores):
     """
-    Given a model and a generator of data for the model, will compute the Q-score for this model.
+    Given a model and generated befores data for the model, will compute the Q-score for this model.
 
-    TODO Explain a bit more the qscore
+    list_of_many_befores is a result of a command such as `list_of_many_befores = get_some_crms(generator, nb_of_batches_to_generate = 200)`
+    where `generator` is a generator of data for the model like train_generator
+
+
+    If two dimensions (datasets or TF) correlate should result in a higher score for them than when alone and vice-versa.
+    The Q-score quantifies this. See details in code comments.
     """
 
 
-
-
-
-    # Generate some data thanks to the CRM generator
-    # Hmm rather reuse the function I specially prepared for this :
-    list_of_many_befores = get_some_crms(generator, nb_of_batches_to_generate = 200)
-    # TODO And then keep it, later we will use it again ! TODO !!
-    # Take 10K or something ?
-    print('Batches generated, proceeding with Q-score calculation')
-
-    #################
-    # TODO MAYBE DON'T REMOVE CRUMBING ABOVE ? THAT WOULD JUSTIFY A DIFFERENCE WITH WHAT I DO BELOW
-    #################
-
-
-    # Now predict and anomalies using the model
+    # Predict and compute anomalies using the model
     list_of_many_predictions = [model.predict(X[np.newaxis, ..., np.newaxis]) for X in list_of_many_befores]
     list_of_many_anomaly_matrices = [anomaly(before, predict[0,:,:,:,0]) for before, predict in zip(list_of_many_befores, list_of_many_predictions)]
 
@@ -502,26 +378,21 @@ def calculate_q_score(model, generator,
     summed_by_dataset = [np.sum(X, axis=2) for X in list_of_many_befores]
     concat_by_dataset = pd.DataFrame(np.vstack(summed_by_dataset))
 
-    # Corr of tf and dataset
-    # GENERAL CORRELATION WITH THIS : horizontal concatenation
+    # Correlation of TF and dataset
+    # General correlation is calculated by concatenating horizontally 
     corr = pd.concat([concat_by_dataset,concat_by_tf],axis=1).corr()
-    # NOTE : as usual dimensions, datasets come first, then tfs
+    # NOTE As with usual dimensions, datasets come first, then tfs
     d_offset = len(concat_by_dataset.columns) # Used because in corr, for example the 2nd tf is at the position nb_of dataset + 2
 
 
 
-
-
-
-
-
-
     def q_score_for_pair_from_groupdf(group, AB_corr_coef):
-        # Okay, the Q-score should take as input dataframes like the ones I usuallly create for the alone+both plots. (the 'group' variable) and the estimated corr coef for AB
+        # The Q-score should take as input dataframes like the ones I usuallly 
+        # create for the alone+both plots. (the 'group' variable) and the estimated corr coef for AB
         # So each line is this : [dimension (A or B), value, status (both or alone)]
         # Calculate if the means are different for A alone and A with B
 
-        # NOTE : THIS IS DIRECTIONAL !!
+        # NOTE This is directional, we see if the score of A changes, not B (B will be done later by calling this function with the group reversed)
 
 
         # Select A alone values and A both
@@ -530,53 +401,30 @@ def calculate_q_score(model, generator,
 
         mean_A_alone = np.mean(scores_alone)
         mean_A_both = np.mean(scores_both)
-        print('mean A alone ='+str(mean_A_alone))
-        print('mean A both ='+str(mean_A_both))
+        #print('mean A alone ='+str(mean_A_alone))
+        #print('mean A both ='+str(mean_A_both))
 
         # Is there a significant difference ? Do a student t-test
-
-        import scipy.stats as sst
-
-        mean_diff = sst.ttest_ind(scores_alone, scores_both, equal_var=False)#.pvalue
-
+        mean_diff = scipy.stats.ttest_ind(scores_alone, scores_both, equal_var=False)#.pvalue
         is_significant = mean_diff.pvalue < 0.05
 
-        print(mean_diff.pvalue)
-
-
         # Now the formula for the q-score
-
         qscore = (AB_corr_coef - is_significant)**2
+
         return qscore, mean_A_alone, mean_A_both, mean_diff.pvalue
-
-
 
 
 
     # Function to compute an individual q-score
     def get_scores_when_copresent_from_matrices(dim_tuple_A, dim_tuple_B, all_befores, all_anomalies):
         """
-        the dim_tuples are like this (dimension, axis) so (2,1) means 2nd dataset and (4,2) means 4th TF
+        The dim_tuples are in the format (dimension, axis); so (2,1) means 2nd dataset and (4,2) means 4th TF
         """
-
-        # ID = 16
-        # m = list_of_many_befores[ID]
-        # mp = np.around(np.clip(list_of_many_predictions[ID][0,...,0],0-0.01,999), decimals=1)
-        # ma = list_of_many_anomaly_matrices[ID]
-        #
-        # #     dim_tuple_A = (6,2)
-        # #     dim_tuple_B = (4,2)
-        # #
-        # utils.plot_3d_matrix(m, figsize = (6,3))
-        # utils.plot_3d_matrix(mp, figsize = (6,3))
-        # utils.plot_3d_matrix(ma, figsize = (6,3))
-
-
 
         group = []
 
         for m, ma in zip(all_befores, all_anomalies):
-            # note : np.take(arr, indices, axis=3) is equivalent to arr[:,:,:,indices,...]
+            # np.take(arr, indices, axis=3) is equivalent to arr[:,:,:,indices,...]
             sliceA = np.take(m, dim_tuple_A[0], axis=dim_tuple_A[1])
             is_A_present = (np.sum(sliceA) != 0)
 
@@ -589,11 +437,10 @@ def calculate_q_score(model, generator,
             else : status = 'none'
 
 
-
             ### Now record each nonzero value in the dimensions in anomalies
-            # For simplicity, we average along the entire X axis BUT ON THE NONZEROS OF COURSe
-
-            # Please note that in the true diagnostic figures done on real CRm data, we DO NOT DO THAT AND CORRECTLY CONSIDER EACH PEAK'S VALUE !!
+            # For simplicity, we average along the entire X axis, but do that on
+            # the nonzeros of course. In the true diagnostic figures on real CRM
+            # we don't do that and correctly consider each peak's value.
             anomaly_xsummed = np.array(np.ma.masked_equal(ma, 0).mean(axis=0))
 
             # Reduce axis by 1 since we summed along the region_size axis
@@ -620,18 +467,14 @@ def calculate_q_score(model, generator,
     dim_tuples = [(i, 1) for i in range(dt_nb)] + [(j, 2) for j in range(tf_nb)]
 
     # Get all pairwise ordered combinations
-    import itertools
     all_duos = list(itertools.permutations(dim_tuples, 2))
 
     for dim_tuple_A, dim_tuple_B in all_duos:
 
-        print("dim tuple A = "+str(dim_tuple_A))
-        print("dim tuple B = "+str(dim_tuple_B))
+        #print("dim tuple A = "+str(dim_tuple_A))
+        #print("dim tuple B = "+str(dim_tuple_B))
 
-        # dim_tuple_A = (3,2)
-        # dim_tuple_B = (3,1)
-
-        # comptue group
+        # compute group
         group = get_scores_when_copresent_from_matrices(dim_tuple_A, dim_tuple_B,
             list_of_many_befores, list_of_many_anomaly_matrices)
 
@@ -641,7 +484,7 @@ def calculate_q_score(model, generator,
         locB = dim_tuple_B[0]+(d_offset*(dim_tuple_B[1]-1))
         AB_corr_coef = corr.iloc[locA, locB]
 
-        print('corr = '+str(AB_corr_coef))
+        #print('corr = '+str(AB_corr_coef))
         qscore, mean_A_alone, mean_A_both, mean_diff_pvalue = q_score_for_pair_from_groupdf(group, AB_corr_coef)
 
         # Make it more diagnostically explicit, with a giant dataframe giving the qscore but also the correlation
@@ -653,10 +496,9 @@ def calculate_q_score(model, generator,
 
     # Sum all original 'before' matrices along the X axis to get the mean_frequencies
     mean_freq = np.mean(list_of_many_befores, axis = (0,1))
-    # useful in q-score weight calculation
+    # Useful in q-score weight calculation
 
-    # Finally make it into a matrix and see the contributions :
-
+    # Finally make it into a matrix and see the contributions
     tnb = dt_nb + tf_nb
     res = np.zeros((tnb,tnb))
     posvar = np.zeros((tnb,tnb))
@@ -669,85 +511,55 @@ def calculate_q_score(model, generator,
         # Datasets first then tf
         dim1_raw = dim_tuple_A[0] + d_offset*(dim_tuple_A[1]-1)
         dim2_raw = dim_tuple_B[0] + d_offset*(dim_tuple_B[1]-1)
-        #val = np.clip(row['mean_A_both']/row['mean_A_alone'], 1, 2)
-        #val = -np.log10(row['mean_diff_pvalue']+0.001)
-        # EXPLAIN THAT WE DO THIS KINDA BONFERRONI
 
+
+        # In a sort-of-Bonferroni correction, we fix the p-value threshold at 5% divided by the number of dimensions
         val = row['mean_diff_pvalue'] < (0.05 / tnb)
-        #val = row['mean_diff_pvalue']
 
-        # IMPORTANT AND ALSO SAY WE CONSIDER ONLY CASES WHERE THE VARiATION IS POSITIVE
-        # TODO : make this a tad more rigorous and keep only cases where variation is in the same direction as the corr coeff sign
+
+        # We consider only variation in the same direction as the correlation coefficient.
+        # ie. when corr coeff is positive (almost all cases) we discard negative variations that
+        # are due to there being no correlation but sometimes noise. However if negative correlation we should keep cases where alone > both
 
         both_higher_than_alone = row['mean_A_alone'] < row['mean_A_both']
 
         res[dim1_raw, dim2_raw] = val
-        posvar[dim1_raw, dim2_raw] = both_higher_than_alone
 
-        """
-        # TODO replace posvar by this : variation IN THE SAME DIRECTION AS THE CORR COEF
-        # so in almost all cases the corr coef is positive so we discard negative
-        # variations that are due to there being no correlation BUT sometimes noise
-        # so there is an artifical "negative" alone/both difference.
-        # But if the correlation is negative then we should keep such cases wher alone > both
-        # So use this code :
         current_corr = corr[dim1_raw, dim2_raw]
         current_corr_is_pos = np.sign(current_corr) > 0
+        #posvar[dim1_raw, dim2_raw] = both_higher_than_alone
         posvar[dim1_raw, dim2_raw] = int(both_higher_than_alone == current_corr_is_pos)
 
 
-
-        # MUST DO IT ! I SAID I DID IN THE PAPER !!!!!
-        """
-
-
-
-
-        # Take the weights for A and B and sum them and multiply that to the q-score
-        # Ofc sum across the entire dimension considered ? or just take the
+        # Take the weights for A and B and sum them and multiply that to the S-score
         A_weight = np.take(mean_freq, dim_tuple_A[0], dim_tuple_A[1]-1)
         B_weight = np.take(mean_freq, dim_tuple_B[0], dim_tuple_B[1]-1)
         qw = np.mean(A_weight) * np.mean(B_weight)
-        # We will use this later in calculating the q-score
-        # IMPORTANT TO MULTIPLY INSTEAD OF SUM !  ALSO I FINALLY TAKE THE SQRT TO SMOOTH OVER THE DIFFERENCES
-        # Kinda justifiable since I make a product of both weights
+        # We will use this later in calculating the q-score.
+        # Multiply and not sum, and take sqrt of product to smooth over differences
         q_weights[dim1_raw, dim2_raw] = np.sqrt(qw)
 
         # We would like the diagonal of weights to stay full zeros. We don't care about A vs A.
         np.fill_diagonal(q_weights, 0)
 
-    """
-    I SHOULD SHOW THESE TWO MATRICES FOR A GOOD AND A BAD MODEL IN SUPPLEMENTARY DATA !!
-
-    THEY ALSO SHOULD BE OUTPUTTED BY THE CODE !!!
-
-    Just multiply them by the summed X axis or something to get final qscore ?
-
-    Also keep only positive variations for reasons explained in my comments
-    """
 
     plt.figure(); posvar_x_res_plot = sns.heatmap(posvar * res).get_figure()
 
-
+    # To simplify, we binarize by marking as "correlating" pairs with a correlation coefficient above the average
     mean_corr = np.mean(np.mean(corr))
-    c = corr > mean_corr # YEAH DO THAT TO SIMPLIFY. TAKE AS CORRELATING THE ONES WHOSE CORR COEFF IS ABOVE MEAN CORR.
+    c = corr > mean_corr
 
     # But plot the true correlation instead
     plt.figure(); corr_plot = sns.heatmap(corr).get_figure()
 
-    # Finally calculate the q-score
-    # EXPLANATION KEEP HERE AND IN PAPER
-    # Is there a difference between the observed "correlation" in posvar*res and the theoretical ones in c ?
+    ## Finally calculate the q-score
+    # Goal is to quantify whether there is a difference between the observed 
+    # "correlation" in posvar*res and the theoretical ones in c ?
     # Then multiply by the weights
     q_raw = ((posvar*res)-c)**2
     q = q_raw * q_weights
     plt.figure(); qscore_plot = sns.heatmap(q, cmap = 'Reds').get_figure()
 
-    #plt.figure(); qscore_plot = sns.heatmap(q_raw).get_figure()
-
-
-
-    # Do it in main code
 
     return (q, qscore_plot, corr_plot, posvar_x_res_plot)
 
@@ -761,6 +573,31 @@ def calculate_q_score(model, generator,
 
 
 
+    """
+    corrs = [0.1,0.1,0.8,0.8]
+    pvals = [0.5,1E-100,1E-100,0.5]
+    [10**(1+r) for r in corrs]
+    [-np.log10(p) for p in pvals]
+
+    import numpy as np
+    def qscore(r,p):
+        # Sort of a logical AND : if there is a correlation, there should be
+        # a differnce in the score.
+
+        # Correlation term
+        C = 10**(1+r)
+        # Mean diffrence term
+        S = -np.log10(p)
+
+        # We expect S to be from 0 to 100 roughly ?
+
+        diff = C-S
+
+        # The score should be high when the difference is low so use a decreasing function
+        return diff
+
+    scores = [qscore(r,p) for r,p in zip(corrs, pvals)]
+    """
 
 
 
@@ -770,48 +607,7 @@ def calculate_q_score(model, generator,
 # --------------------------- Diagnostic plots ------------------------------- #
 ################################################################################
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ----------------------------- Artificial data ------------------------------ #
-
 
 def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
     region_length,nb_datasets,nb_tfs, reliable_datasets = None, tf_groups = None,
@@ -1026,7 +822,7 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
         before_nosquish = ad.list_of_peaks_to_matrix(merged_peaks,region_length,nb_datasets,nb_tfs,
                                                                     ones_only = partial_make_a_fake_matrix.keywords['ones_only'])
 
-        # WARNING : make_a_fake_matrix does not squish the matrix along the X
+        # NOTE make_a_fake_matrix() does not squish the matrix along the X
         # axis. We must do that before submitting to the model, and unsquish
         # before considering the result
         before = utils.squish(before_nosquish[..., np.newaxis], squish_factor)
@@ -1090,6 +886,7 @@ def get_some_crms(train_generator, nb_of_batches_to_generate = 20, try_remove_cr
     if try_remove_crumbs:
         # Remove crumbs by rounding. Crumbs should never be at 1 unless massive evidnce, so mat-0.5 should never be rounded at 1
         # For cases where we were not crumbed, since peaks are usually at 1, we use mat-0.45 instead, so 1-0.45=0.55 is still rounded to 1
+        # TODO As for anomaly, this will break when we have non-binary peak values !!
         list_of_many_crms = [np.clip(np.around(X-0.45), 0,1)[:,:,:,0] for X in many_crms]
 
     return list_of_many_crms
@@ -1115,9 +912,6 @@ def get_some_crms(train_generator, nb_of_batches_to_generate = 20, try_remove_cr
 
 
 
-
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 
 
@@ -1216,9 +1010,6 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
 
     ## Average (and max) score per number of peaks in CRM
-
-
-
     res = pd.DataFrame(columns=['nb_peaks', 'average_score', 'max_score'])
     for name, group in df_gp:
         scores = [float(s) for s in group['anomaly_score']]
@@ -1244,13 +1035,6 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
     plots += [p]
 
     return plots
-
-
-
-
-
-
-
 
 
 
@@ -1295,16 +1079,11 @@ def get_scores_whether_copresent(tf_A, tf_B, atypeak_result_file, crm_file_path)
 
     for name, group in df_gp:
 
-        # Get scores by TF for this CRM
-        #d = subdf[['tf','anomaly_score']].groupby('tf')
-        #d['anomaly_score'].apply(lambda x: x.to_list()).to_dict()
-
         # Is A present ? Is B present ? Are they both present ?
         present_tfs = set(group.loc[:,'tf'].tolist())
 
         flagA = tf_A in present_tfs
         flagB = tf_B in present_tfs
-
 
         # Record the score for each TF and whether A, B, or both were present
         for _, peak in group.iterrows():
