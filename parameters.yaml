@@ -128,6 +128,8 @@ tf_pairs:
   - ["ell2", "phf8"]
   - ["ell2", "brd4"]
   - ["sfmbt1", "rcor1"]
+  - ["brd4", "phf8"]
+
 
 # FOR K562:
 # tf_pairs:
@@ -148,3 +150,4 @@ estimate_corr_group_for:
     - ['GSE40632','aff4']
     - ['GSE45441','sfmbt1']
     - ['GSE22478','phf8']
+    - ['GSE51633, 'brd4']

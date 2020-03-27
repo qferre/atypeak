@@ -302,7 +302,7 @@ model = train_model(model, parameters)
 # abundance, normalization, etc.
 list_of_many_crms = er.get_some_crms(train_generator,
     nb_of_batches_to_generate = parameters['nb_batches_generator_for_diag_list_of_many_crms'])
-
+# TODO Add a timer for this
 
 
 
@@ -347,9 +347,9 @@ if parameters['perform_model_diagnosis']:
 
 
             # Save the figures 
-            before_2d_plot.get_figure().savefig(plot_output_path + "example_crm_before_2dmax_"+i+".pdf")
-            prediction_2d_plot.get_figure().savefig(plot_output_path + "example_crm_rebuilt_2dmax_"+i+".pdf")
-            anomaly_plot.savefig(plot_output_path + "example_crm_anomaly_"+i+".pdf")
+            before_2d_plot.get_figure().savefig(plot_output_path + "example_crm_before_2dmax_"+str(i)+".pdf")
+            prediction_2d_plot.get_figure().savefig(plot_output_path + "example_crm_rebuilt_2dmax_"+str(i)+".pdf")
+            anomaly_plot.savefig(plot_output_path + "example_crm_anomaly_"+str(i)+".pdf")
 
             i = i+1 # Increment counter
 
@@ -382,7 +382,7 @@ if parameters['perform_model_diagnosis']:
     # Do not consider the zeros where a peak was not placed, only the peaks and the rebuilt peaks
     #sb = np.ma.masked_equal(summed_befores, 0).mean(axis=0)
     sb = np.array(summed_befores).mean(axis=0)
-    mean_before_plot = sns.heatmap(sb, annot = True)
+    plt.figure(figsize=eval_figsize_small); mean_before_plot = sns.heatmap(sb, annot = True)
 
     anomaly_values = np.ma.masked_equal(summed_anomalies, 0)
     median_anomaly_values = np.ma.median(anomaly_values, axis=0)
@@ -408,8 +408,17 @@ if parameters['perform_model_diagnosis']:
 
     print("Beginning Q-score evaluation. Can be long...")
 
+    qstart = time.time()
+
     q, qscore_plot, corr_plot, posvar_x_res_plot = er.calculate_q_score(model,
         list_of_many_befores = list_of_many_crms)
+
+    qend = time.time()
+
+
+    qtotal_time = qend-qstart
+    print('Q-score evaluation completed in '+str(qtotal_time)+' seconds.')
+
 
     # Final q-score (total sum)
     print("-- Total Q-score of the model (lower is better) : "+ str(np.sum(np.sum(q))))
@@ -427,6 +436,10 @@ if parameters['perform_model_diagnosis']:
 
     print("Q-score evaluation results saved.")
 
+
+
+    
+    
 
 
 
@@ -482,14 +495,14 @@ if parameters['perform_model_diagnosis']:
     for filter_nb in range(w.shape[-1]):
         plt.figure(figsize=eval_figsize_small); dfp = sns.heatmap(w[:,:,0,0,filter_nb])
         #utils.plot_3d_matrix(w[:,:,:,0,filter_nb], figsize=(6,4))
-        dfp.get_figure().savefig(plot_output_path + "conv_kernel_datasets_"+filter_nb+".pdf")
+        dfp.get_figure().savefig(plot_output_path + "conv_kernel_datasets_"+str(filter_nb)+".pdf")
     
     # TFs
     w = model.layers[5].get_weights()[0]
     for filter_nb in range(w.shape[-1]):
         #utils.plot_3d_matrix(w[:,0,:,:,filter_nb], figsize=(6,4))
         plt.figure(figsize=eval_figsize_small); tfp = sns.heatmap(w[0,0,:,:,filter_nb]) # 2D version only at the first X (often the same anyways)
-        dfp.get_figure().savefig(plot_output_path + "conv_kernel_tf_x0_"+filter_nb+".pdf")
+        dfp.get_figure().savefig(plot_output_path + "conv_kernel_tf_x0_"+str(filter_nb)+".pdf")
 
     # ----------------------- Visualize encoded representation ------------------- #
 
@@ -774,7 +787,7 @@ else:
 
 
             # REDO THIS ON NORMALIZED FINAL FILE
-            print("... in the normalized file ...")
+            print("... in the normalized file.")
             score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_final, CRM_FILE)
             score_distrib_tfnorm.save(plot_output_path+'score_distribution_TFNORM.pdf')
             avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_TFNORM.pdf')
@@ -785,7 +798,7 @@ else:
 
             # ----------------- Scores when known cofactors (or known non-cofactors) are present
 
-            print("Retrieving scores for specified TF pairs...")
+            print("Retrieving scores for specified TF pairs and estimating correlation groups...")
 
 
 
@@ -793,14 +806,21 @@ else:
             # Work on NORMALIZED scores. TODO SAY SO IN PAPER FIGURES AND IN DEBUG MESSAGES and/or comments here !!!!!
 
 
-
-            tfs_to_plot = parameters['tf_pairs']
-
-            for pair in tfs_to_plot:
+            for pair in parameters['tf_pairs']:
                 try:
-                    # TODO CAREFUL ABOUT CASE !!
+                # TODO CAREFUL ABOUT CASE !!
                     tf1, tf2 = pair
-                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_normalized, CRM_FILE)
+
+
+
+                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_final, CRM_FILE)
+                    
+                    
+                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_path_corr_group_normalized, CRM_FILE)
+                    
+                    
+                    
+                    
                     p.save(plot_output_path+"tfdiag_"+tf1+"_"+tf2+".pdf")
                 except:
                     print("Error fetching the pair : "+str(pair))
@@ -812,12 +832,17 @@ else:
             # Try to estimate the correlation groups learned by the model for certain select sources (TF+dataset pair) by looking at what kind of phantoms are added by the model
 
             for combi in parameters['estimate_corr_group_for']:
-
-                dataset, tf = combi
-                
-                output_path_estimation = plot_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
-                
-                fig = er.estimate_corr_group_for_combi(dataset, tf,
-                    all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
-                    crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
-                fig.get_figure().savefig(output_path_estimation)
+                try:
+                    dataset, tf = combi
+                    
+                    output_path_estimation = plot_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
+                    
+                    fig = er.estimate_corr_group_for_combi(dataset, tf,
+                        all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
+                        crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
+                    fig.get_figure().savefig(output_path_estimation)
+                     
+                     
+                except:
+                    print("Error estimating for : "+str(combi))
+                    print("Ignoring.")

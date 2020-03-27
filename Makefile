@@ -197,7 +197,6 @@ split:
 
 
 # # Temporary, for sacapus cluster tests
-# # TODO Add it to .PHONY
 # sacapus_run:
 # 	COMMAND="""mkdir -p qsub_output
 # 	conda activate atypeak
