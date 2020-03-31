@@ -9,6 +9,15 @@ We use it on ChIP-Seq peaks from ReMap. We present a stacked multiview approach 
 Please see the paper for more details.
 
 
+
+
+
+
+MAYBE SPLIT THIS INTO SEVERAL READMEs IN A DOC ?
+
+
+
+
 ## Description
 
 Quickly summarize the philosphy : few layers, stacked multiview, convolution for combis, autoencoder for compression to lose anomalies and keep good features
@@ -113,10 +122,12 @@ The other fields are discarded.
 Explain the contents
 
 - model contains the saved model and parameters
-- diagnostic contains various diagnostic plot
+- diagnostic contains various diagnostic plot grouped by cell line
 - bed contains the result files, and tsvs of scores
 
 EXPLAIN THE SIGNIFICATION OF THE VARIOUS BEDS
+
+EXPLAIN THE SIGNIFICATION OF THE VARIOUS PLOTS (maybe in a separate Readme)
 
 The output bed files are named according to whether they had normalization applied or not. For most use cases, use the BED file wieh "FINAL" in the filename which contains all normalizations.
 

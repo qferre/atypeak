@@ -195,7 +195,16 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # Build a full CRM. Assuming negative effects are negligible and that in biology more is always better
         # See the maximum score reached by each : they should be "100%" (ie. perfect score, equal to BEFORE with crumbing), if more or less there is bias to be corrected
         full_crm = (average_crm_2d>0).astype(int)
+
+        # full_crm_3d = np.stack([average_crm_2d]*320, axis=0).astype('float64')
+        # full_crm_3d = full_crm_3d/np.mean(full_crm_3d)
+        # full_crm_3d = cp.look_here_stupid(full_crm_3d)
+        
         full_crm_3d = np.stack([full_crm]*320, axis=0).astype('float64')
+
+        # TODO UNHARDCODE THE 320 ABOVE !!
+
+
         if use_crumbing: full_crm_3d = cp.look_here_stupid(full_crm_3d)
 
         predictionf= model.predict(full_crm_3d[np.newaxis,...,np.newaxis])[0,:,:,:,0]
@@ -346,6 +355,8 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
     # Create an empty CRM with a peak only for this combi
     x = np.zeros((crm_length, len(all_datasets), len(all_tfs)))
     x[:,curr_dataset_id, curr_tf_id] = before_value
+
+    # TODO USE CRUMBING INSTEAD OF THIS
     x[:,:, curr_tf_id] += 0.1*before_value
     x[:,curr_dataset_id, :] += 0.1*before_value
 
@@ -462,19 +473,22 @@ def calculate_q_score(model, list_of_many_befores,
             else : status = 'none'
 
 
-            ### Now record each nonzero value in the dimensions in anomalies
-            # For simplicity, we average along the entire X axis, but do that on
-            # the nonzeros of course. In the true diagnostic figures on real CRM
-            # we don't do that and correctly consider each peak's value.
-            anomaly_xsummed = np.array(np.ma.masked_equal(ma, 0).mean(axis=0))
+            # Only proceed if there is at least one of the pair, A or B
+            if status != 'none':
 
-            # Reduce axis by 1 since we summed along the region_size axis
-            sliceA_anomaly = np.take(anomaly_xsummed, dim_tuple_A[0], axis=dim_tuple_A[1]-1)
-            sliceB_anomaly = np.take(anomaly_xsummed, dim_tuple_B[0], axis=dim_tuple_B[1]-1)
+                ### Now record each nonzero value in the dimensions in anomalies
+                # For simplicity, we average along the entire X axis, but do that on
+                # the nonzeros of course. In the true diagnostic figures on real CRM
+                # we don't do that and correctly consider each peak's value.
+                anomaly_xsummed = np.array(np.ma.masked_equal(ma, 0).mean(axis=0))
 
-            # Record all nonzero values for each
-            for v in sliceA_anomaly[sliceA_anomaly.nonzero()]: group += [('A',v, status)]
-            for v in sliceB_anomaly[sliceB_anomaly.nonzero()]: group += [('B',v, status)]
+                # Reduce axis by 1 since we summed along the region_size axis
+                sliceA_anomaly = np.take(anomaly_xsummed, dim_tuple_A[0], axis=dim_tuple_A[1]-1)
+                sliceB_anomaly = np.take(anomaly_xsummed, dim_tuple_B[0], axis=dim_tuple_B[1]-1)
+
+                # Record all nonzero values for each
+                for v in sliceA_anomaly[sliceA_anomaly.nonzero()]: group += [('A',v, status)]
+                for v in sliceB_anomaly[sliceB_anomaly.nonzero()]: group += [('B',v, status)]
 
         # Return the result df
         groupres =  pd.DataFrame(group, columns = ['dim','score','status'])
@@ -519,6 +533,14 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
+
+
+    print("DEBUG THIS LOOP COMPLETE; THIS IS THE LONG LOOP I SHOULD TRY TO MULTIPROCESS IT TO SEE")
+
+
+
+
+
     # Sum all original 'before' matrices along the X axis to get the mean_frequencies
     mean_freq = np.mean(list_of_many_befores, axis = (0,1))
     # Useful in q-score weight calculation
@@ -530,6 +552,15 @@ def calculate_q_score(model, list_of_many_befores,
     q_weights = np.zeros((tnb,tnb))
 
     for _, row in all_qscores_df.iterrows():
+
+
+
+
+        print("DEBUG BEGINNING")
+
+
+
+
 
         dim_tuple_A = row['dimA'] ; dim_tuple_B = row['dimB']
 
@@ -550,7 +581,8 @@ def calculate_q_score(model, list_of_many_befores,
 
         res[dim1_raw, dim2_raw] = val
 
-        current_corr = corr[dim1_raw, dim2_raw]
+
+        current_corr = corr.iloc[dim1_raw, dim2_raw]
         current_corr_is_pos = np.sign(current_corr) > 0
         #posvar[dim1_raw, dim2_raw] = both_higher_than_alone
         posvar[dim1_raw, dim2_raw] = int(both_higher_than_alone == current_corr_is_pos)
