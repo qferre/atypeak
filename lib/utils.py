@@ -14,7 +14,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from lib import artificial_data
 
 
-
 ################################################################################
 # ----------------------------- Matrix utilities ----------------------------- #
 ################################################################################
@@ -40,8 +39,6 @@ def zeropad(arr, pad_width):
     return padded
 
 
-
-
 def bin_ndarray(ndarray, new_shape, operation='mean'):
     """
     Bins an ndarray in all axes based on the target shape.
@@ -61,6 +58,7 @@ def bin_ndarray(ndarray, new_shape, operation='mean'):
         op = getattr(ndarray, operation)
         ndarray = op(-1*(i+1))
     return ndarray
+
 
 # MaxPooling a 3d matrix along its first axis (the [0] axis, for "region length")
 def squish(m, factor=10):
@@ -92,7 +90,6 @@ def plot_3d_matrix(mat, figsize=(10,6),
         - alpha (default 0.5) : Controls the transparency of plotted points
         - guideline (default True) : draws a line across nonzero elements in the X axis to help see perspective
         - standard_scale (default True) : will assume the values are between 0 and 1.
-
 
     Example :
 
@@ -153,7 +150,6 @@ def plot_3d_matrix(mat, figsize=(10,6),
     c_raw = np.array(c_raw_list)
     c = np.tile(c_raw[:,None], [1, 3]) # Fake RGB tiling
 
-
     ## Color scale
     if not standard_scale: c = (c-np.min(mat))/(np.max(mat)-np.min(mat))
 
@@ -164,7 +160,6 @@ def plot_3d_matrix(mat, figsize=(10,6),
     if rb_scale :
         c[:,2] = 1 - c[:,2]
         c[:,1] = 0
-
 
 
     # DEBUG - TF color override for figures 
@@ -199,7 +194,7 @@ def plot_3d_matrix(mat, figsize=(10,6),
     ax.set_ylim(0,mat.shape[1])
     ax.set_zlim(0,mat.shape[2])
 
-    return fig # and then in main code do this_fig.savefig()
+    return fig # and then in main code do fig.savefig()
 
 
 
@@ -228,7 +223,6 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
     Also requires crm_start (BED position) and crm_length for coordinate correction.
     """
-
 
     # Convert origin_data_file from a list of strings to a list of lists
     origin_lines = [l.rstrip().split('\t') for l in origin_data_file]
@@ -266,30 +260,6 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
         # Collect its anomaly vector
         anomaly_vector = anomaly_matrix[xmin:xmax,dataset,tf]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         ## Maximum score along the peak
         anomaly_score_raw = np.nanmax(anomaly_vector) * 1000
         anomaly_score = int(np.around(anomaly_score_raw))
@@ -310,7 +280,6 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
 
 
     return result_bed
-
 
 
 
@@ -350,9 +319,6 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
 
     with open(outputpath, 'a') as of : # Open in append mode
         mergedbed.to_csv(of, header=False, index=True, sep = '\t')
-
-
-
 
 
 
@@ -402,12 +368,6 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict,
 
 
 
-
-
-
-
-
-
 def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = None):
 
     scores_tf=dict()
@@ -442,7 +402,6 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
                 scores_datasets[dataset] = [score]
 
     rf.close()
-
 
 
 

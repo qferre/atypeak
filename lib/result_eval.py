@@ -10,7 +10,7 @@ import time
 import functools
 import itertools
 
-import pybedtools
+#import pybedtools
 import numpy as np
 import pandas as pd
 import scipy.stats
@@ -273,7 +273,24 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # ------------- FINAL
         # Finally : final value is the product of the two weights
         k = first_weight * second_weight
+
+
+        # Applying this k directly would tend towards giving 1000 to the "typical" behavior.
+        # Let's say typical behaviour should get 750 to have some margin for improvement
+        k = 0.75*k
+
+
+        # To prevent overamplification of not-learned sources (seen as noise), cap k at 10
+        k = min(k,10)
+
+ 
+
+
+
         coefs_norm[combi] = k # Record it
+
+        # To prevent overamplification of not-learned sources (seen as noise), cap k at 10
+        
 
         # TODO PRINT THIS IN A FILE SOMEWHERE !!!
         logcombifile = open(outfilepath,'a')
@@ -288,10 +305,12 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
     # Normalize by the lowest k as otherwise we give 1000 to the "typical" behavior.
     # Let's say we want to give 750 to typical behavior NOTE IN PAPER IMPORTANT FOR INTERPRETATION
     # We want some margin for improvement : lowest k should bso insteaf of highest k, divide by 75 percent of lowest k
+    #maxval = 1/0.75 * coefs_norm[min(coefs_norm, key=coefs_norm.get)]
+    #coefs_norm_final = {k: v/maxval for k,v in coefs_norm.items()}
+    # To prevent overamplification of not-learned sources (seen as noise), cap k at 10
 
-    maxval = 1/0.75 * coefs_norm[min(coefs_norm, key=coefs_norm.get)]
 
-    coefs_norm_final = {k: v/maxval for k,v in coefs_norm.items()}
+
     logcombifile.close()
 
     return coefs_norm_final
@@ -355,7 +374,8 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
 ################################################################################
 
 
-def calculate_q_score(model, list_of_many_befores):
+def calculate_q_score(model, list_of_many_befores,
+    all_datasets_names, all_tf_names):
     """
     Given a model and generated befores data for the model, will compute the Q-score for this model.
 
@@ -366,6 +386,11 @@ def calculate_q_score(model, list_of_many_befores):
     If two dimensions (datasets or TF) correlate should result in a higher score for them than when alone and vice-versa.
     The Q-score quantifies this. See details in code comments.
     """
+
+        
+
+    # Required labels for seaborn heatmaps ; Q labels are : all datasets, then all tfs
+    q_labels = all_datasets_names + all_tf_names
 
 
     # Predict and compute anomalies using the model
@@ -543,14 +568,14 @@ def calculate_q_score(model, list_of_many_befores):
         np.fill_diagonal(q_weights, 0)
 
 
-    plt.figure(); posvar_x_res_plot = sns.heatmap(posvar * res).get_figure()
+    plt.figure(); posvar_x_res_plot = sns.heatmap(posvar * res, xticklabels=q_labels, yticklabels=q_labels).get_figure()
 
     # To simplify, we binarize by marking as "correlating" pairs with a correlation coefficient above the average
     mean_corr = np.mean(np.mean(corr))
     c = corr > mean_corr
 
     # But plot the true correlation instead
-    plt.figure(); corr_plot = sns.heatmap(corr).get_figure()
+    plt.figure(); corr_plot = sns.heatmap(corr, xticklabels=q_labels, yticklabels=q_labels).get_figure()
 
     ## Finally calculate the q-score
     # Goal is to quantify whether there is a difference between the observed 
@@ -558,7 +583,8 @@ def calculate_q_score(model, list_of_many_befores):
     # Then multiply by the weights
     q_raw = ((posvar*res)-c)**2
     q = q_raw * q_weights
-    plt.figure(); qscore_plot = sns.heatmap(q, cmap = 'Reds').get_figure()
+    plt.figure(); qscore_plot = sns.heatmap(q, cmap = 'Reds', xticklabels=q_labels, yticklabels=q_labels).get_figure()
+
 
 
     return (q, qscore_plot, corr_plot, posvar_x_res_plot)

@@ -14,9 +14,7 @@ from keras import backend as K
 
 from skimage.filters import gaussian as gaussian_filter
 
-
 from lib import utils
-
 
 
 
@@ -36,7 +34,6 @@ def look_here_stupid(matrix, crumb = 0.1):
     if len(matrix.shape) != 3:
         raise TypeError('ERROR - Trying to crumb a non-3D matrix.')
 
-
     result = matrix.copy()
 
     # Get the indices of all non-zero elements of the array
@@ -51,7 +48,6 @@ def look_here_stupid(matrix, crumb = 0.1):
         result[x,:,z] += crumb * val # Transcription factors
 
     return result
-
 
 
 
@@ -82,21 +78,18 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         batch_features = list()
         batch_status = list()
 
-
         # NOTE I already tried multiprocessing this, it slowed it, likely due to disk reading overhead.
-
 
         for i in indexes:
             # Get the query arguments and generate the matrix
 
-            # NOTE : stacking all TFs along a third dimension is done in the
+            # NOTE Stacking all TFs along a third dimension is done in the
             # matrix generating call (in data_read.py), not here !
             # Instead we will just supply the crm_id and unsparse the matrix
             crm_id = matrices_keys[i]
             X = matrix_generating_call(crm_id=crm_id)
 
             if debug_print : print(crm_id)
-
 
             if crumb != None :
                 # To counter sparsity, add a crumbs (see function documentation)
@@ -105,16 +98,12 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
             batch_features.append(X)
             batch_status.append('data')
 
-
             
             # # Override : from time to time, return a 'noise -> empty' pair
             # # to train the network to discard noise
             # if rand < p :
             #     noisy_shape = X.shape
             #     noisy = noise_generating_call(pad_to,noisy_shape[1],noisy_shape[2])
-
-            #     # TODO Define parameters dynamically based on data
-
             #     batch_features.append('noisy')
             #     batch_status.append('noise')
             
@@ -123,7 +112,7 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         def pad_batch(arr):
             #arr = np.array(arr) # Force to numpy array to be safe
             #padded = [np.pad(x,pad_width = ((pad_to - x.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0) for x in arr]
-            padded = [utils.zeropad(x,pad_width = ((3200 - x.shape[0],0),(0,0),(0,0))) for x in arr]
+            padded = [utils.zeropad(x, pad_width = ((3200 - x.shape[0],0),(0,0),(0,0))) for x in arr]
 
             return np.array(padded)
 
@@ -285,20 +274,17 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
                 (0,0)
             )
 
-
-    # TODO REMOVE USELESS PADDINGS
-
     # Pool only on the region size dimension
     filter_pooling = (pooling_factor,1,1)
 
-    ##  Kernel sizes
+    ## Kernel sizes
     # Size in dimensions not processed must be equal to shape so there is no convolution here
 
     # The first convolution is made on datasets only, the second on TFs
     kernel_size_d = (kernel_width_in_basepairs,nb_datasets,1)
 
     # We use shorter kernels for the TFs combinations
-    k=2 # TODO DON'T HARDCODE THIS ?
+    k=2 # TODO Don't hardcode this ?
     kernel_size_t = (int(kernel_width_in_basepairs/k),1,nb_tfs)
 
 
@@ -334,7 +320,7 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
 
 
 
-    ## ENCODER
+    ## ----- ENCODER
 
     ## Convolutional layers
     # NOTE Convolutions are made on each axis separtely as the represent info
@@ -405,7 +391,7 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
 
 
 
-    ## DECODER
+    ## ----- DECODER
 
     x = Lambda(lambda m: K.expand_dims(K.expand_dims(m,3),4),
         output_shape = lambda input_shape: input_shape + (1,1)

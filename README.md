@@ -28,7 +28,7 @@ The raw data included here is a subset of ReMap 2018 data, source is <remap link
 
 ### Installation
 
-Works only on linux and macos due to pybedtools
+Works only on linux and macos due to pybedtools and makefile
 
 - Run `make install`, to create a conda environment. called 'atypeak'.
 
@@ -51,7 +51,7 @@ Set load_saved_model and process_full_real_data to False, so you will train a mo
 
 This will also produce q-score and other diagnostics plots and info in the output directory (presumably if you relaod a model, you have already diagnosed it and can set perform_model_diagnosis to False).
 
-Look at the diagnostic plots : MOST NOTABLY look at some examples of rebuit CRMS (TODO MAKE THOSE BE PRINTED) to see if there are enough corr groups, and look at the q-score (see paper)
+Look at the diagnostic plots : MOST NOTABLY look at some examples of rebuit CRMS  to see if there are enough corr groups, and look at the q-score (see paper)
 
 
 
@@ -127,6 +127,37 @@ chr    start   end    dataset.tf.cell_line    atypeak_score   strand
 The one you want is "{cell_line}_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
 
 The paper as well as comments in main.py explain the rest
+
+
+### BED significance
+
+Each BED has a name depending on the normalizations applied to it for the cell ine "cell_line". THe noteworthy ones are :
+- cell_line.bed with raw scores
+- cell_line_normalized_corr_group with our custom normalization to correct biases in rebuilding (cf. paper)
+- cell_line_FINAL_... with the corr group norlalization and then centered and reduces by TR (transcirpiton regulator) to center scores of each TR around mean for said TR
+
+### Diagnostic figures significance
+
+
+
+- `urexamples` contains for each encoded dimension a 2d (sum across X axis, the region size) CRM that would most activate it estimated by gradient ascent
+- `crm_examples` contains some example CRMs. Each number is the same crm with a before (its representation), rebuilt (the output of the model) and anomaly (difference between the two, which is 3d). 2d figs are summed across X axis
+
+- scores_tf and scores_datasets give the median score for each dimension after corr group normalization
+
+- alone_both give the distribution of scores for each TR in a give TR pair, where the other member of the pair is present or absent. This is done on the final file with corr group AND by tf normalizations
+
+- average_crm is a 2d (averaged across X axis) average of 200*64 (depending on parameters) CRMs
+
+
+
+Q-score
+- corr_datasets_tf gives the correlation of each dimension (in order, datasets and then TR) with each other (for example, is the presence of peaks from dataset2 correlated with peaks from TF 5). Order is alphabetical, and you have datasets then TR TODO MAKE IT BE WRITTEN ON THE MATRIX ()
+- posvar: does the presence of a peak from the line dimension increase score of the column dimension
+- qscore
+
+
+STILL MISSING SOME
 
 ## Contributing
 

@@ -41,6 +41,7 @@ clean :
 	# Remove all data and results
 	rm -rf ./data/input/
 	rm -rf ./data/output/
+	rm -rf ./data/input_raw/*.bed
 	# We however keep the compressed input_raw
 
 
