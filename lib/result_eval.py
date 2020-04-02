@@ -330,7 +330,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
     logcombifile.close()
 
-    return coefs_norm_final
+    return coefs_norm
 
 
 
