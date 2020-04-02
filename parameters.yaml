@@ -150,4 +150,4 @@ estimate_corr_group_for:
     - ['GSE40632','aff4']
     - ['GSE45441','sfmbt1']
     - ['GSE22478','phf8']
-    - ['GSE51633, 'brd4']
+    - ['GSE51633', 'brd4']
