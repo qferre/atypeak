@@ -16,7 +16,7 @@ import scipy
 # Plotting
 import matplotlib.pyplot as plt
 import seaborn as sns
-from plotnine import ggplot, aes, geom_violin, geom_boxplot, position_dodge, scale_fill_grey
+from plotnine import ggplot, aes, geom_violin, geom_boxplot, position_dodge, scale_fill_grey, geom_bar, theme
 
 # ML
 import keras
@@ -43,6 +43,7 @@ parameters = yaml.load(open(root_path+'/parameters.yaml').read(), Loader = yaml.
 SEED = parameters["random_seed"]
 # Python internals
 os.environ["PYTHONHASHSEED"]=str(SEED)
+    #TODO seems useless ?? Then why did they recommend it ?
 random.seed(SEED)
 # For Numpy, which will also impact Keras, and Theano if used
 np.random.seed(SEED)
@@ -142,8 +143,11 @@ else:
     # ---------------------------- Real data --------------------------------- #
     # Collect all CRM numbers (each one is a *sample*)
     matrices_id = crmid.values()
-    all_matrices = list(set(matrices_id)) # The sorting  itself is irrelevant here, but it is crucial that it is the same evertyime
-    # TODO : set python hash seed !!!
+
+    # The list of matrices ID must be made only of unique elements. 
+    # The order does not matter in and of itself, but must be randomized and the same for a given random seed, as if affects training
+    seenid = set() ; all_matrices = [x for x in matrices_id if x not in seenid and not seenid.add(x)]
+    random.shuffle(all_matrices)
 
     train_generator = cp.generator_unsparse(all_matrices, parameters["nn_batch_size"],
                             get_matrix, parameters["pad_to"], parameters["crumb"], parameters["squish_factor"])
@@ -468,9 +472,13 @@ if parameters['perform_model_diagnosis']:
     # the third plot says whether the presence of both results in a change in 
     # score and should "look like" the correlation plot. In terms of axis X and
     # Y, you have datasets THEN Tfs. (ie. first datasets 1 to i and THEN TFs 1 to j)
-    qscore_plot.savefig(plot_output_path+'qscore_plot.pdf')
-    corr_plot.savefig(plot_output_path+'corr_plot_datasets_then_tf.pdf')
-    posvar_x_res_plot.savefig(plot_output_path+'posvar_when_both_present_plot_datasets_then_tf.pdf')
+
+    qscore_output_path = plot_output_path + "q_score/"
+    if not os.path.exists(qscore_output_path): os.makedirs(qscore_output_path)
+
+    qscore_plot.savefig(qscore_output_path+'qscore_plot.pdf')
+    corr_plot.savefig(qscore_output_path+'corr_plot_datasets_then_tf.pdf')
+    posvar_x_res_plot.savefig(qscore_output_path+'posvar_when_both_present_plot_datasets_then_tf.pdf')
 
     np.savetxt(plot_output_path+'q_score.tsv', q, delimiter='\t')
 
@@ -918,7 +926,7 @@ else:
 
 
 
-            # Work on NORMALIZED scores. TODO SAY SO IN PAPER FIGURES AND IN DEBUG MESSAGES and/or comments here !!!!!
+            # NOTE We work on FINAL NORMALIZED scores after both normalizations. TODO SAY SO IN PAPER FIGURES AND IN DEBUG MESSAGES and/or comments here !!!!!
 
             # TODO CHECK WHICH FILE I USE PRECISELY
 
