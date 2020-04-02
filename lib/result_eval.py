@@ -10,7 +10,7 @@ import time
 import functools
 import itertools
 
-#import pybedtools
+import pybedtools
 import numpy as np
 import pandas as pd
 import scipy.stats
@@ -172,6 +172,11 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
     average_crm_2d = np.mean(average_crm, axis = 0)
 
 
+    # WARNING 
+    # IT IS CRITICAL THAT average_crm_2d BE NOT CRUMBED FOR LATER CALCULATIONS (ie inferring a full crm from the first weight)
+    # NOTE I MUST ADD NOTES where I generate the list_of_many_CRMS to NOT ADD CRUMBING THERE !!!
+
+
     for combi in all_combis:
 
 
@@ -238,6 +243,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # APPLY THE FIRST WEIGHT and proceed as usual
         prediction_2d = prediction_2d * first_weight
         # Rq : since I normalize later, this is useless !!!!!????
+        # HMM NOT QUITE USELESS I THING.
 
 
 
@@ -252,6 +258,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # What would mark this combi as "complete" (value of 1) ?
         # MODIFIED : instead I normalize the prediction to have a sum of 1
         requested_group = prediction_2d/np.sum(prediction_2d)
+        # This is useless since I divide by the maximum later though, I could just take predition_2d ! CHANGE IT !!
 
 
 
@@ -302,6 +309,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         
 
         # TODO PRINT THIS IN A FILE SOMEWHERE !!!
+        # TODO MAKE THIS A TSV !!!
         logcombifile = open(outfilepath,'a')
         logcombifile.write(str(combi)+'\t--> '+"First weight = " + str(first_weight)+'\n')
         logcombifile.write(str(combi)+'\t--> '+"Second weight = " + str(second_weight)+'\n')
@@ -535,7 +543,7 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
-    print("DEBUG THIS LOOP COMPLETE; THIS IS THE LONG LOOP I SHOULD TRY TO MULTIPROCESS IT TO SEE")
+    #print("DEBUG THIS LOOP COMPLETE; THIS IS THE LONG LOOP I SHOULD TRY TO MULTIPROCESS IT TO SEE")
 
 
 
@@ -556,7 +564,7 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
-        print("DEBUG BEGINNING")
+
 
 
 
@@ -627,35 +635,6 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
-
-
-
-
-    """
-    corrs = [0.1,0.1,0.8,0.8]
-    pvals = [0.5,1E-100,1E-100,0.5]
-    [10**(1+r) for r in corrs]
-    [-np.log10(p) for p in pvals]
-
-    import numpy as np
-    def qscore(r,p):
-        # Sort of a logical AND : if there is a correlation, there should be
-        # a differnce in the score.
-
-        # Correlation term
-        C = 10**(1+r)
-        # Mean diffrence term
-        S = -np.log10(p)
-
-        # We expect S to be from 0 to 100 roughly ?
-
-        diff = C-S
-
-        # The score should be high when the difference is low so use a decreasing function
-        return diff
-
-    scores = [qscore(r,p) for r,p in zip(corrs, pvals)]
-    """
 
 
 

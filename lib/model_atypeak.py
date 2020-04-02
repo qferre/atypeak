@@ -509,14 +509,14 @@ def compute_max_activating_example_across_layer(model,
             if (blurStdX+blurStdY+blurStdZ) is not 0 and i % blurEvery == 0 :
                 input_data[0,:,:,:,0] = gaussian_filter(input_data[0,:,:,:,0], sigma=np.array([blurStdX, blurStdY, blurStdZ]))
 
-            # Control print
-            sys.stdout.write("\r" + '-- Current loss value : ' + str(np.mean(loss_value))) ; sys.stdout.flush()
+            # Control print giving the loss value at each step (in our case, the activation)
+            sys.stdout.write("\r" + 'Dimension '+str(class_index)+' -- Activation = ' + str(np.mean(loss_value))) ; sys.stdout.flush()
 
         # decode the resulting input image and add it to the list
         max_activation_class.append(input_data[0])
         losses.append(loss_value)
         end_time = time.time()
-        print('\nOutput dimension %d processed in %ds' % (class_index, end_time - start_time))
+        #print('\nOutput dimension %d processed in %ds' % (class_index, end_time - start_time))
 
 
     # Return the processed list of optimal class examples
