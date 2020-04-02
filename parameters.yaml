@@ -2,6 +2,8 @@
 # Results are done by cell line and will go in the appropriate directory.
 cell_line: "hela"
 
+
+
 # ---------------------------- Execution ------------------------------------- #
 
 #### Model
@@ -28,6 +30,9 @@ perform_real_data_diagnosis: True
 
 
 # ---------------------------- Autoencoder model ----------------------------- #
+
+# Core parameter : used all across the program, including in training !
+random_seed: 42
 
 # Below are the key parameters for info budget
 
@@ -84,8 +89,6 @@ artificial_nb_tfs: 8
 artificial_ones_only: True
 artificial_watermark_prob: 0.75
 
-# Core parameter : used all across the program, including in training !
-random_seed: 42
 
 
 
@@ -150,4 +153,4 @@ estimate_corr_group_for:
     - ['GSE40632','aff4']
     - ['GSE45441','sfmbt1']
     - ['GSE22478','phf8']
-    - ['GSE51633, 'brd4']
+    - ['GSE51633','brd4']

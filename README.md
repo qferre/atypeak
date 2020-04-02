@@ -1,12 +1,8 @@
 # atyPeak
 
-This repository presents a tool for correlating peaks (BED file regions) from multiple datasets using convolutional autoencoders for k-dimensional tensors.
+This repository presents a tool for correlating peaks (BED file regions) from multiple datasets using convolutional autoencoders for k-dimensional tensors. We present a stacked multiview approach with a comparatively shallow network.
 
-The code is written in Keras.
-
-We use it on ChIP-Seq peaks from ReMap. We present a stacked multiview approach with a comparatively shallow network.
-
-Please see the paper for more details.
+The code is written in Keras ; the data used here are ChIP-Seq peaks from ReMap. 
 
 
 
@@ -23,12 +19,13 @@ MAYBE SPLIT THIS INTO SEVERAL READMEs IN A DOC ?
 Quickly summarize the philosphy : few layers, stacked multiview, convolution for combis, autoencoder for compression to lose anomalies and keep good features
 
 
+Please see the paper for more details. 
+
+
+
 ### Results
 
 ReMap data has been processed, available here : www.remap/the_tab_that_Benoit_promised_me
-
-The raw data included here is a subset of ReMap 2018 data, source is <remap link>
-
 
 
 ## Usage
@@ -135,9 +132,7 @@ All output bed FILES have the following format :
 chr    start   end    dataset.tf.cell_line    atypeak_score   strand
 
 
-The one you want is "{cell_line}_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
 
-The paper as well as comments in main.py explain the rest
 
 
 ### BED significance
@@ -145,7 +140,10 @@ The paper as well as comments in main.py explain the rest
 Each BED has a name depending on the normalizations applied to it for the cell ine "cell_line". THe noteworthy ones are :
 - cell_line.bed with raw scores
 - cell_line_normalized_corr_group with our custom normalization to correct biases in rebuilding (cf. paper)
-- cell_line_FINAL_... with the corr group norlalization and then centered and reduces by TR (transcirpiton regulator) to center scores of each TR around mean for said TR
+- "{cell_line}_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed" with the corr group norlalization and then centered and reduces by TR (transcirpiton regulator) to center scores of each TR around mean for said TR
+
+The ones you want are the last two (elaborate more once decided.)
+
 
 ### Diagnostic figures significance
 
@@ -176,7 +174,10 @@ STILL MISSING SOME
 
 Please feel free to post issues on GitHub !
 
+The paper as well as comments in main.py explain the rest
 
+
+ALSO EXPLAIN THAT USAGE INSTRUCTIONS IN DETAILS ARE IN THE PAPER
 
 
 
@@ -184,21 +185,9 @@ Please feel free to post issues on GitHub !
 
 
 
-Please cite XXXXXXXXXXXXXXXXXXXXX
+Please cite <atyPeak paper]
 
-
-
-ALSO EXPLAIN THAT USAGE INSTRUCTIONS IN DETAILS ARE IN THE PAPER
-
-
-Add at least link to preprint, then link to true paper and links to remap papers. And link back to my remap tab of course
-
-
-
-
-ReMap data :  http://tagc.univ-mrs.fr/remap/
-
-
+The raw data included here is a subset of ReMap 2018 data, source is <remap link>
 
 This code is available under the GNU GPL3 license.
 
