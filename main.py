@@ -16,7 +16,7 @@ import scipy
 # Plotting
 import matplotlib.pyplot as plt
 import seaborn as sns
-from plotnine import ggplot, aes, geom_violin, geom_boxplot, position_dodge, scale_fill_grey
+from plotnine import ggplot, aes, geom_violin, geom_boxplot, position_dodge, scale_fill_grey, geom_bar, theme
 
 # ML
 import keras
@@ -573,7 +573,7 @@ if parameters['perform_model_diagnosis']:
         #ex = np.around(ex/np.max(ex), decimals = 1)
         x = np.mean(ex, axis = 0)
         plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0)
-        urfig.get_figure().savefig(urexample_output_path + "urexample_dim_"+exid+".pdf")
+        urfig.get_figure().savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
 
 
     """
@@ -796,15 +796,17 @@ else:
 
             ## Quantify effect of normalization
 
-            sub_raw = scores_by_tf_df_raw.loc[:,['tf','mean']]
-            sub_raw.columns = ['tf','mean_raw_before_norm']
-            sub_after = scores_by_tf_df.loc[:,['tf','mean']]
-            sub_after.columns = ['tf','mean_after_norm']
-            df_cur = pd.merge(sub_raw, sub_after, on="tf")
+            sub_raw = scores_by_tf_df_raw.loc[:,['mean']]
+            sub_raw.columns = ['mean_raw_before_corrgroup_normalization']
+            sub_after = scores_by_tf_df.loc[:,['mean']]
+            sub_after.columns = ['mean_after_corrgroup_normalization']
+            df_cur = sub_raw.join(sub_after)
+            df_cur = df_cur.reset_index()
+            #df_cur = pd.merge(sub_raw, sub_after, on="tf")
             #df_cur = sub_raw.to_frame(name = 'mean_raw_before_norm').join(sub_after.to_frame(name='mean_after_norm'))
-            df_cur_melted = df_cur.melt(id_vars=['tf'], value_vars=['mean_raw_before_norm','mean_after_norm'])
-            p = ggplot(df_cur_melted, aes(x = tf, y= value, fill = variable)) + geom_bar(stat="identity", width=.5, position = "dodge")
-            p.save(plot_output_path+"scores_by_tf_before_and_after_corrgroup_normalization.pdf", height=8, width=10, units = 'in', dpi=3200)
+            df_cur_melted = df_cur.melt(id_vars=['tf'], value_vars=['mean_raw_before_corrgroup_normalization','mean_after_corrgroup_normalization'])
+            p = ggplot(df_cur_melted, aes(x = "tf", y= "value", fill = "variable")) + geom_bar(stat="identity", width=.7, position = "dodge") + theme(legend_position = "top")
+            p.save(plot_output_path+"scores_by_tf_before_and_after_corrgroup_normalization.pdf", height=8, width=16, units = 'in', dpi=3200)
 
             # TODO Same for datasets
 
