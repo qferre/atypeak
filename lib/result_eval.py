@@ -310,11 +310,16 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
         # TODO PRINT THIS IN A FILE SOMEWHERE !!!
         # TODO MAKE THIS A TSV !!!
+        #header="dataset\ttf\tintra_group_weight\tinter_group_weight\tfinal_k" # Only at beginning OFC
+        #line=str(combi[0])+'\t'+str(combi[1])+'\t'+str(first_weight)+'\t'+str(second_weight)+'\t'+str(k)
+        # Maybe add prediction_this and occupancy ?
+        #logcombifile.write(line)
         logcombifile = open(outfilepath,'a')
         logcombifile.write(str(combi)+'\t--> '+"First weight = " + str(first_weight)+'\n')
         logcombifile.write(str(combi)+'\t--> '+"Second weight = " + str(second_weight)+'\n')
         logcombifile.write(str(combi)+'\t--> '+"k = " + str(k)+'\n')
         logcombifile.write('------'+'\n')
+
 
 
 
@@ -625,6 +630,11 @@ def calculate_q_score(model, list_of_many_befores,
     q = q_raw * q_weights
     plt.figure(); qscore_plot = sns.heatmap(q, cmap = 'Reds', xticklabels=q_labels, yticklabels=q_labels).get_figure()
 
+
+    # Fix for truncated axis tick labels
+    qscore_plot.figure.tight_layout()
+    corr_plot.figure.tight_layout()
+    posvar_x_res_plot.figure.tight_layout()
 
 
     return (q, qscore_plot, corr_plot, posvar_x_res_plot)

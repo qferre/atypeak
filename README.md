@@ -150,7 +150,9 @@ The ones you want are the last two (elaborate more once decided.)
 
 
 - `urexamples` contains for each encoded dimension a 2d (sum across X axis, the region size) CRM that would most activate it estimated by gradient ascent
-- `crm_examples` contains some example CRMs. Each number is the same crm with a before (its representation), rebuilt (the output of the model) and anomaly (difference between the two, which is 3d). 2d figs are summed across X axis
+- `crm_examples` contains some example CRMs. Each number is the same crm with a before (its representation), rebuilt (the output of the model) and anomaly (difference between the two, which is 3d). 2d figs are MAX across X axis
+
+- `conv_kernels` contains the weights of all convolutional filters, for datasets and tf (only at first positino x=0 for the latter)
 
 - scores_tf and scores_datasets give the median score for each dimension after corr group normalization
 
@@ -163,7 +165,7 @@ The ones you want are the last two (elaborate more once decided.)
 Q-score
 - corr_datasets_tf gives the correlation of each dimension (in order, datasets and then TR) with each other (for example, is the presence of peaks from dataset2 correlated with peaks from TF 5). Order is alphabetical, and you have datasets then TR TODO MAKE IT BE WRITTEN ON THE MATRIX ()
 - posvar: does the presence of a peak from the line dimension increase score of the column dimension
-- qscore
+- qscore : individual contributions of each pair to the qscore (with numerical values as a tsv)
 
 
 STILL MISSING SOME

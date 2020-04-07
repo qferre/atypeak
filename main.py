@@ -374,9 +374,9 @@ if parameters['perform_model_diagnosis']:
 
             # 2D - max along region axis
             before_2d = np.max(before, axis=0)
-            plt.figure(figsize=eval_figsize_small); before_2d_plot = sns.heatmap(np.transpose(before_2d), cmap = 'Blues')
+            plt.figure(figsize=eval_figsize_small); before_2d_plot = sns.heatmap(np.transpose(before_2d), cmap = 'Blues', xticklabels = datasets_clean, yticklabels = cl_tfs)
             prediction_2d = np.max(prediction, axis=0)
-            plt.figure(figsize=eval_figsize_small); prediction_2d_plot = sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f')
+            plt.figure(figsize=eval_figsize_small); prediction_2d_plot = sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
 
             # utils.plot_3d_matrix(before, figsize=eval_figsize_large)
             # clipped_pred = np.around(np.clip(prediction,0,999), decimals=1)
@@ -424,17 +424,17 @@ if parameters['perform_model_diagnosis']:
 
     # Do not consider the zeros where a peak was not placed, only the peaks and the rebuilt peaks
     #sb = np.ma.masked_equal(summed_befores, 0).mean(axis=0)
-    sb = np.array(summed_befores).mean(axis=0)
-    plt.figure(figsize=eval_figsize_small); mean_before_plot = sns.heatmap(sb, annot = True)
+    #sb = np.array(summed_befores).mean(axis=0)
+    #plt.figure(figsize=eval_figsize_small); mean_before_plot = sns.heatmap(sb, annot = True)
 
     anomaly_values = np.ma.masked_equal(summed_anomalies, 0)
     median_anomaly_values = np.ma.median(anomaly_values, axis=0)
-    plt.figure(figsize=eval_figsize_small); median_anomaly_values_plot = sns.heatmap(median_anomaly_values, annot = True).get_figure()
+    plt.figure(); median_anomaly_values_plot = sns.heatmap(median_anomaly_values.transpose(), annot = True, fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
 
     # Save this as a diagnostic plot
-    median_anomaly_values_plot.savefig(plot_output_path+'median_anomaly_values.pdf')
+    median_anomaly_values_plot.get_figure().savefig(plot_output_path+'median_anomaly_score.pdf')
 
-
+    
 
 
 
@@ -552,7 +552,7 @@ if parameters['perform_model_diagnosis']:
     for filter_nb in range(w.shape[-1]):
         #utils.plot_3d_matrix(w[:,0,:,:,filter_nb], figsize=(6,4))
         plt.figure(figsize=eval_figsize_small); tfp = sns.heatmap(w[0,0,:,:,filter_nb]) # 2D version only at the first X (often the same anyways)
-        dfp.get_figure().savefig(kernel_output_path + "conv_kernel_tf_x0_"+str(filter_nb)+".pdf")
+        tfp.get_figure().savefig(kernel_output_path + "conv_kernel_tf_x0_"+str(filter_nb)+".pdf")
 
     # ----------------------- Visualize encoded representation ------------------- #
 
@@ -580,7 +580,7 @@ if parameters['perform_model_diagnosis']:
         ex = ex[...,0]
         #ex = np.around(ex/np.max(ex), decimals = 1)
         x = np.mean(ex, axis = 0)
-        plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0)
+        plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0, annot = True, fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
         urfig.get_figure().savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
 
 
@@ -765,14 +765,14 @@ else:
             sub_df = scores_by_tf_df.loc[:,['count','50pc']]
             sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
             for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-            plt.savefig(plot_output_path+'scores_by_tf_after_corrgroup_normalization_only.pdf')
+            plt.savefig(plot_output_path+'scores_median_by_tf_after_corrgroup_normalization_only.pdf')
 
             # By dataset
             fig, ax = plt.subplots(figsize=(10, 8))
             sub_df = scores_by_dataset_df.loc[:,['count','50pc']]
             sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
             for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-            plt.savefig(plot_output_path+'scores_by_dataset_after_corrgroup_normalization_only.pdf')
+            plt.savefig(plot_output_path+'scores_median_by_dataset_after_corrgroup_normalization_only.pdf')
 
 
 
@@ -814,7 +814,7 @@ else:
             #df_cur = sub_raw.to_frame(name = 'mean_raw_before_norm').join(sub_after.to_frame(name='mean_after_norm'))
             df_cur_melted = df_cur.melt(id_vars=['tf'], value_vars=['mean_raw_before_corrgroup_normalization','mean_after_corrgroup_normalization'])
             p = ggplot(df_cur_melted, aes(x = "tf", y= "value", fill = "variable")) + geom_bar(stat="identity", width=.7, position = "dodge") + theme(legend_position = "top")
-            p.save(plot_output_path+"scores_by_tf_before_and_after_corrgroup_normalization.pdf", height=8, width=16, units = 'in', dpi=3200)
+            p.save(plot_output_path+"scores_mean_by_tf_before_and_after_corrgroup_normalization.pdf", height=8, width=16, units = 'in', dpi=3200)
 
             # TODO Same for datasets
 
