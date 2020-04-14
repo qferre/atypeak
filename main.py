@@ -67,9 +67,10 @@ if K.backend() == 'tensorflow' :
 
         #tf.get_logger().setLevel('INFO') # Disable INFO, keep only WARNING and ERROR messages
 
-        # For reproducibility ? Hmm I'm not sure
-        #config.intra_op_parallelism_threads = 1
-        #config.inter_op_parallelism_threads = 1
+        # For reproducibility ! 
+        # NOTE This was the key reproducibility argument
+        config.intra_op_parallelism_threads = 1
+        config.inter_op_parallelism_threads = 1
 
         sess = tf.Session(graph = tf.get_default_graph(), config=config)
         K.set_session(sess)
@@ -84,11 +85,14 @@ if K.backend() == 'tensorflow' :
         gpu_devices = tf.config.experimental.list_physical_devices('GPU')
         for device in gpu_devices: tf.config.experimental.set_memory_growth(device, True)
 
-        #tf.config.threading.set_inter_op_parallelism_threads(1)
-        #tf.config.threading.set_intra_op_parallelism_threads(1)
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+        tf.config.threading.set_intra_op_parallelism_threads(1)
 
 
-
+    # TODO DISABLE GPU FOR ABSOLUTE REPRODUCIBILITY
+    # Not a problem since models are comparatively simple : the big bottleneck is
+    # actually the file reading and matrix unsparsing
+    #os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 
 
 ## Reading corresponding keys. See the documentation of prepare() for more.
@@ -139,6 +143,11 @@ if parameters['use_artificial_data'] :
                                         tfgroup_split = parameters['artificial_tfgroup_split'],
                                         crumb = None)
     print('Using artificial data of dimensions : '+str(parameters['artificial_nb_datasets'])+' x '+str(parameters['artificial_nb_tfs']))
+
+    # Also override the datasets and TF names, replace them with random
+    datasets_clean = ["dat_"+str(i) for i in range(parameters['artificial_nb_datasets'])]
+    cl_tfs = ["tf_"+str(i) for i in range(parameters['artificial_nb_tfs'])]
+
 else:
     # ---------------------------- Real data --------------------------------- #
     # Collect all CRM numbers (each one is a *sample*)
@@ -155,8 +164,12 @@ else:
     print("Using real data for the '"+parameters["cell_line"]+"' cell line.")
 
 
-
-
+"""
+# Okay, randomness is the same for the generator
+for i in range(3):
+    k= next(train_generator)
+    print(np.sum(k))
+"""
 
 ################################ MODEL #########################################
 # Load parameters for the AutoEncoder (AE) from the config file, add missing
@@ -230,6 +243,12 @@ def prepare_model_with_parameters(parameters):
 # Prepare the model
 model = prepare_model_with_parameters(parameters)
 
+"""
+# Check initial weights
+wtest = model.get_weights()
+print(wtest[0][0,0,0,0,1:4])
+"""
+
 
 # Control print of parameters
 print("-- PARAMETERS :")
@@ -298,6 +317,7 @@ def train_model(model,parametrs):
         model.fit_generator(train_generator, verbose=1,
             steps_per_epoch = parameters["nn_batches_per_epoch"],
             epochs = parameters["nn_number_of_epochs"],
+            #epochs = 1,
             callbacks = [es, es2],
             max_queue_size = 1) # Max queue size of 1 to prevent memory leak
         end = time.time()
@@ -323,8 +343,11 @@ def train_model(model,parametrs):
 # Train the model
 model = train_model(model, parameters)
 
-
-
+"""
+# Check new weights
+wtest = model.get_weights()
+print(wtest[0][0,0,0,0,1:4])
+"""
 
 
 
@@ -340,9 +363,13 @@ model = train_model(model, parameters)
 # Get some samples (3D tensor representations of CRMs, like, 200*48 or something)
 # This is used MANY times in the code, for Q-score, many diagnostics, and
 # abundance, normalization, etc.
+start_genlist = time.time()
 list_of_many_crms = er.get_some_crms(train_generator,
     nb_of_batches_to_generate = parameters['nb_batches_generator_for_diag_list_of_many_crms'])
-# TODO Add a timer for this
+stop_genlist = time.time()
+# TODO Add a timer (in console print I mean) for this
+print('List of many CRMs for evaluation collated in '+str(stop_genlist-start_genlist)+' seconds.')
+
 
 
 
@@ -727,7 +754,7 @@ else:
         corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(model = model,
             all_datasets = datasets_clean, all_tfs = cl_tfs, list_of_many_crms = list_of_many_crms,
             crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
-            outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.txt")
+            outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.tsv")
 
         # Apply them
         utils.normalize_result_file_with_coefs_dict(output_bed_merged,
@@ -942,8 +969,35 @@ else:
             for pair in tfs_to_plot:
                 try:
                 # TODO CAREFUL ABOUT CASE !!
+
+
+                    pair = ["sfmbt1","e2f1"]
+
                     tf1, tf2 = pair
-                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_final, CRM_FILE)
+                    
+                    
+                    
+                    
+                    # RE-enable this
+                    #p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_final, CRM_FILE)
+                    
+                    
+                    
+                    
+                    
+                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_merged, CRM_FILE)
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
                     p.save(tf_alone_both_output_path+"tf_alone_both_"+tf1+"_"+tf2+".pdf")
                 except:
                     print("Error fetching the pair : "+str(pair))
@@ -963,7 +1017,7 @@ else:
                     
                     output_path_estimation = corrgroup_estim_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
                     
-                    fig = er.estimate_corr_group_for_combi(dataset, tf,
+                    fig, _ = er.estimate_corr_group_for_combi(dataset, tf,
                         all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
                         crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
                     fig.get_figure().savefig(output_path_estimation)
