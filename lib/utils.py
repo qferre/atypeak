@@ -452,6 +452,8 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
             if np.isnan(new_score) : new_score = 0 # Hotfix
 
             # FINALLY clip at 1000 to match BED format
+            # NOTE only clip now, after the final normalization !!
+            # TODO say that exactly in paper !!
             new_score = int(np.around(np.clip(new_score,0,1000)))
 
             # Rejoin line and write it

@@ -248,10 +248,11 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         
         # Only nonzero terms that correspond to a real peak : discard negative influences, and crumbing
         #before_sum = np.sum((before_2d_p * full_crm_2d))
-        before_sum = before_2d_p[curr_dataset_id, curr_tf_id] # HOTFIX use this only due to crumbing making sums different if we use the line above
-        prediction_sum = np.sum((prediction_2d * full_crm_2d)[prediction_2d>0])
-        #intra_weight = np.sum(before_2d_p)/np.sum(prediction_2d)
-        iw = before_sum/prediction_sum
+        #before_sum = before_2d_p[curr_dataset_id, curr_tf_id] # HOTFIX use this only due to crumbing making sums different if we use the line above
+        #prediction_sum = np.sum((prediction_2d * full_crm_2d)[prediction_2d>0])
+        # never mind, it didn't help, was not justifiable and could cause problems of its own
+        iw = np.sum(before_2d_p)/np.sum(prediction_2d)
+        #iw = before_sum/prediction_sum
         
 
         intra_weight_mask[curr_dataset_id, curr_tf_id] = iw
@@ -294,7 +295,8 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         before_others = np.clip(before_2df - others_mask, 0, 2) # Floor at 0 and cap at 2 to prevent biases in others_mask and
         
         
-        
+        #plt.figure();sns.heatmap(before_2df.transpose(), annot = True,fmt = ".2f")
+       
         #plt.figure();sns.heatmap(others_mask.transpose(), annot = True,fmt = ".2f", cmap = "Greys")
         
 
@@ -376,7 +378,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         negative_occupancy = np.array(negative_occupancy)
         mean_negative_occupancy = np.mean(negative_occupancy[negative_occupancy.nonzero()]) 
         
-
+        # NOTE : Due to negative weights mean/max occupancy can be higher than 1 !!?? SAY SO IN METHODS PAPER
 
         # The final second weight is, 1/usual proportinal occupancy
         inter_weight = max_occupancy_possible/mean_occupancy
@@ -400,10 +402,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # An estimate is such : 
         # We retake before_other that contains more or less all peaks that are not in the current correlation group
 
-
-
-
-        
+   
         
         
         #plt.figure();sns.heatmap(before_others.transpose(), annot = True,fmt = ".2f", cmap = "Reds")
@@ -416,17 +415,12 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         
         
         #before_2df_others = np.mean(full_crm_3d_others, axis=0)
-        
+        #plt.figure();sns.heatmap(before_2df_others.transpose(), annot = True,fmt = ".2f", cmap = "Purples")
 
-        
-        
         #plt.figure();sns.heatmap(prediction_2df_others.transpose(), annot = True,fmt = ".2f", cmap = "Oranges")
 
         # prediction_2df_others can be see as "how much rebuilding could all other complete groups provide
 
-        
-        
-        
 
 
         others_contibution = prediction_2df_others[curr_dataset_id,curr_tf_id]

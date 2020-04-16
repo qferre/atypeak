@@ -56,6 +56,7 @@ if K.backend() == 'tensorflow' :
     import tensorflow as tf
 
     # Check TensorFlow version
+    # TODO If I force TF2 in the env, use only the relevant parts
     from distutils.version import LooseVersion
     USING_TENSORFLOW_2 = (LooseVersion(tf.__version__) >= LooseVersion("2.0.0"))
 

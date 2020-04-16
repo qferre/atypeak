@@ -44,7 +44,8 @@ clean :
 	rm -rf ./data/input_raw/*.bed
 	# We however keep the compressed input_raw
 
-
+# clean_env:
+	# conda remove --name atypeak --all
 
 
 

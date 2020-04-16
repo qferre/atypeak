@@ -147,8 +147,6 @@ The ones you want are the last two (elaborate more once decided.)
 
 ### Diagnostic figures significance
 
-
-
 - `urexamples` contains for each encoded dimension a 2d (sum across X axis, the region size) CRM that would most activate it estimated by gradient ascent
 - `crm_examples` contains some example CRMs. Each number is the same crm with a before (its representation), rebuilt (the output of the model) and anomaly (difference between the two, which is 3d). 2d figs are MAX across X axis
 
@@ -163,7 +161,7 @@ The ones you want are the last two (elaborate more once decided.)
 
 
 Q-score
-- corr_datasets_tf gives the correlation of each dimension (in order, datasets and then TR) with each other (for example, is the presence of peaks from dataset2 correlated with peaks from TF 5). Order is alphabetical, and you have datasets then TR TODO MAKE IT BE WRITTEN ON THE MATRIX ()
+- corr_datasets_tf gives the correlation of each dimension with each other (for example, is the presence of peaks from dataset2 correlated with peaks from TF 5).
 - posvar: does the presence of a peak from the line dimension increase score of the column dimension
 - qscore : individual contributions of each pair to the qscore (with numerical values as a tsv)
 
@@ -187,7 +185,7 @@ ALSO EXPLAIN THAT USAGE INSTRUCTIONS IN DETAILS ARE IN THE PAPER
 
 
 
-Please cite <atyPeak paper]
+Please cite <atyPeak paper>
 
 The raw data included here is a subset of ReMap 2018 data, source is <remap link>
 
@@ -200,4 +198,4 @@ This code is available under the GNU GPL3 license.
 Quentin Ferré -- quentin.ferre@gmail.com
 
 
- Acknowledgements : Jeanne, Cécile Capponi, Benoît Ballester, maybe also Denis
+ Acknowledgements : Jeanne Chèneby, Cécile Capponi, Benoît Ballester,  Denis Puthier

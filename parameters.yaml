@@ -32,7 +32,7 @@ perform_real_data_diagnosis: True
 # ---------------------------- Autoencoder model ----------------------------- #
 
 # Core parameter : used all across the program, including in training !
-random_seed: 42
+random_seed: 1234
 
 # Below are the key parameters for info budget
 
@@ -76,6 +76,7 @@ nn_pooling_factor: 2
 # if `null`, default weight of 1 is used.
 tf_weights: null
 datasets_weights: null
+
 
 # ---------------------------- Diagnostic ------------------------------------ #
 
@@ -131,6 +132,7 @@ tf_pairs:
   - ["ell2", "phf8"]
   - ["ell2", "brd4"]
   - ["sfmbt1", "rcor1"]
+  - ["sfmbt1", "brd4"]
   - ["brd4", "phf8"]
 
 
