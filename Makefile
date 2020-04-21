@@ -24,6 +24,7 @@ PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed
 install:
 	# Create the conda environment we need
 	conda env create -f env.yaml
+	# conda init
 
 
 
@@ -32,9 +33,17 @@ prepare: decompress copybin intersect convert dictionaries split
 
 
 # Run the model with the parameters specified in parameters.yaml
-run:
+run: train process
 	conda activate atypeak
 	python3 main.py
+
+train:
+	conda activate atypeak
+	python3 train.py
+
+process:
+	conda activate atypeak
+	python3 process.py
 
 
 clean :

@@ -47,11 +47,13 @@ PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE 
 
 ### Running
 
+
+
 - Set the parameters in *parameters.yaml*. The meaning of them is detailed in YAML comments
 
 Then use `make run`. The network is comparatively shallow and can be run on a CPU.
 
-Set load_saved_model and process_full_real_data to False, so you will train a model, evaluate it with Q-score, and save it.
+**Set load_saved_model and process_full_real_data to False**, so you will train a model, evaluate it with Q-score, and save it.
 
 - Once you run the script once, you will have a trained model names trained_{cell_line}_model.h5 ; this way you can now activate use_trained_model in the parameters in the yaml.
 
@@ -61,12 +63,14 @@ Look at the diagnostic plots : MOST NOTABLY look at some examples of rebuit CRMS
 
 
 
-Once satisfied, set those two parameters (load_saved_model and process_full_real_data) to True  and then use `make run` againso that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis. This is done because processing the real data is the most consuming part
+Once satisfied, **set those two parameters (load_saved_model and process_full_real_data) to True  and then use `make run` again** so that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis. This is done because processing the real data is the most consuming part
 
 
 
 
-
+NOTE : I MAY HAVE CHANGED THIS.
+    New paradigm is that you can still do the above, or do make train and make denoise separately ??
+    Hmm given that many important diagnostic figures are done in train, maybe I do not want to leave that choice to the user
 
 
 

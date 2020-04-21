@@ -1,5 +1,4 @@
 import os, io, time, sys, subprocess
-from multiprocessing import Pool
 
 import pandas as pd
 import numpy as np
@@ -8,7 +7,7 @@ import scipy.sparse as sp
 
 # -------------------------- Preparation per cell line ----------------------- #
 
-def prepare(cell_line, root_path):
+def get_data_indexes(cell_line, root_path):
     """
     Given a cell line, will collect :
     - the list of datsets containing information for this cell line

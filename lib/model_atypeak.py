@@ -20,39 +20,35 @@ from lib import utils
 
 
 # ------------------------------ Reading data -------------------------------- #
-# Utility funcions preparing the raw read data for use in the model
-
-
-def look_here_stupid(matrix, crumb = 0.1):
-    """
-    To counter sparsity, we add crumbs to matrices of peak presence.
-    Put a crumb (default 0.1) on all nucleotides where a peak was found in at
-    least one dataset. The crumb is much lower than true peak score, and
-    prevents the model from always learning zeroes.
-    """
-
-    if len(matrix.shape) != 3:
-        raise TypeError('ERROR - Trying to crumb a non-3D matrix.')
-
-    result = matrix.copy()
-
-    # Get the indices of all non-zero elements of the array
-    nonzero = np.nonzero(matrix)
-
-    for i in range(nonzero[0].shape[0]):
-        x,y,z = nonzero[0][i], nonzero[1][i], nonzero[2][i]
-        val = matrix[x,y,z]
-
-        # Add crumbs
-        result[x,y,:] += crumb * val # Datasets
-        result[x,:,z] += crumb * val # Transcription factors
-
-    return result
 
 
 
 
 
+
+
+
+# import threading
+# 
+# class threadsafe_iter:
+#     """
+#     # Takes an iterator/generator and makes it thread-safe by locking `next`.
+#     """
+#     def __init__(self, it):
+#         self.it = it
+#         self.lock = threading.Lock()
+#
+#     def __iter__(self): return self
+#
+#     def __next__(self):
+#         with self.lock: return self.it.__next__()
+#
+# def threadsafe_generator(f):
+#     # A decorator that takes a generator function and makes it thread-safe.
+#     def g(*a, **kw): return threadsafe_iter(f(*a, **kw))
+#     return g
+
+# @threadsafe_generator
 def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         pad_to, crumb = 0.1, squish_factor = 10, debug_print = False):
     """
@@ -93,7 +89,7 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
 
             if crumb != None :
                 # To counter sparsity, add a crumbs (see function documentation)
-                X = look_here_stupid(X, crumb)
+                X = utils.look_here_stupid(X, crumb)
 
             batch_features.append(X)
             batch_status.append('data')

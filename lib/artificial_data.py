@@ -4,7 +4,7 @@ import numpy as np
 import random
 
 from lib import utils
-from lib import model_atypeak as cr
+#from lib import model_atypeak as cr
 
 """
 Functions to generate artificial data for model evaluation.
@@ -41,7 +41,7 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
 
             if crumb != None :
                 # To counter sparsity, add crumbs (see function documentation)
-                X = cr.look_here_stupid(X, crumb)
+                X = utils.look_here_stupid(X, crumb)
 
             Xi = X[..., np.newaxis] # Add meaningless 'channel' dimension
             batch_features.append(Xi)

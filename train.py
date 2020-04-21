@@ -29,17 +29,15 @@ import lib.artificial_data as ad    # Trivial data for control
 import lib.result_eval as er        # Result production and evaluation
 import lib.utils as utils           # Miscellaneous
 
+import lib.prepare as prepare 
+
 ############################# PARAMETERS AND SETUP #############################
 
-try: root_path = os.path.dirname(os.path.realpath(__file__))
-except NameError:
-    print('Assuming a Jupyter kernel since `__file__` does not exist : root path set to "."')
-    root_path = '.'
-
+root_path = os.path.dirname(os.path.realpath(__file__))
 parameters = yaml.load(open(root_path+'/parameters.yaml').read(), Loader = yaml.Loader)
 
 
-### Set random seeds - Numpy and TensorFlow
+### Set random seeds - Numpy and TensorFlow and Python
 SEED = parameters["random_seed"]
 # Python internals
 os.environ["PYTHONHASHSEED"]=str(SEED)
@@ -52,6 +50,9 @@ np.random.seed(SEED)
 
 
 # For TensorFlow only
+# TODO Enforce tensorflow as the backend. This is already the case in my environment and
+# since I use the latest version of keras. Just import tensorflow and don't check 
+# the keras backend
 if K.backend() == 'tensorflow' :
     import tensorflow as tf
 
@@ -96,8 +97,8 @@ if K.backend() == 'tensorflow' :
     #os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 
 
-## Reading corresponding keys. See the documentation of prepare() for more.
-crmtf_dict, datasets, crmid, datapermatrix, peaks_per_dataset, cl_tfs = dr.prepare(parameters['cell_line'], root_path)
+## Reading corresponding keys. See the documentation of get_data_indexes() for more.
+crmtf_dict, datasets, crmid, datapermatrix, peaks_per_dataset, cl_tfs = dr.get_data_indexes(parameters['cell_line'], root_path)
 
 
 #datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets] # TODO Datasets : might wish to use a parent name later
@@ -134,15 +135,29 @@ if not os.path.exists(plot_output_path): os.makedirs(plot_output_path)
 # You may use either the artificial data generator or the true data.
 # Artificial data is mainly used for calibrations and demonstrations.
 
-if parameters['use_artificial_data'] :
-    # ------------------------- Artificial data ------------------------------ #
-    train_generator = ad.generator_fake(region_length = parameters['pad_to'],
+def produce_data_generator(all_parameters_dict, matrices_id, get_matrix_func): # remake due to threading conflicts
+    # Artificial data
+    if parameters['use_artificial_data'] :
+        generator = ad.generator_fake(region_length = parameters['pad_to'],
                                         nb_datasets = parameters['artificial_nb_datasets'], nb_tfs=parameters['artificial_nb_tfs'],
                                         squish_factor = parameters['squish_factor'], ones_only=parameters['artificial_ones_only'],
                                         watermark_prob = parameters['artificial_watermark_prob'],
                                         overlapping_groups = parameters['artificial_overlapping_groups'],
                                         tfgroup_split = parameters['artificial_tfgroup_split'],
                                         crumb = None)
+    
+    # Real data
+    if not parameters['use_artificial_data'] :
+        generator = cp.generator_unsparse(all_matrices, parameters["nn_batch_size"],
+                        get_matrix, parameters["pad_to"], parameters["crumb"], parameters["squish_factor"])
+   
+    return generator
+
+
+
+## First, prepare the parameters 
+if parameters['use_artificial_data'] :
+    # ------------------------- Artificial data ------------------------------ #
     print('Using artificial data of dimensions : '+str(parameters['artificial_nb_datasets'])+' x '+str(parameters['artificial_nb_tfs']))
 
     # Also override the datasets and TF names, replace them with random
@@ -159,10 +174,28 @@ else:
     seenid = set() ; all_matrices = [x for x in matrices_id if x not in seenid and not seenid.add(x)]
     random.shuffle(all_matrices)
 
-    train_generator = cp.generator_unsparse(all_matrices, parameters["nn_batch_size"],
-                            get_matrix, parameters["pad_to"], parameters["crumb"], parameters["squish_factor"])
-
     print("Using real data for the '"+parameters["cell_line"]+"' cell line.")
+
+
+
+## Now prepare the generator
+train_generator = produce_data_generator(all_parameters_dict=parameters, matrices_id=all_matrices, get_matrix_func=get_matrix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 """
@@ -177,73 +210,17 @@ for i in range(3):
 # ones and create the model
 
 
-def prepare_model_with_parameters(parameters):
-    """
-    A wrapper function that will prepare an atyPeak model given the current parameters.
-    Non-pure, since it depends on the rest of the code.
-    """
-
-    # Optimizer : Adam with custom learning rate
-    optimizer_to_use = getattr(keras.optimizers, parameters["nn_optimizer"])
-    opti_custom = optimizer_to_use(lr=parameters["nn_optimizer_learning_rate"])
-
-    if parameters['use_artificial_data']:
-        nb_datasets_model = parameters['artificial_nb_datasets']
-        nb_tfs_model = parameters['artificial_nb_tfs']
-    else:
-        nb_datasets_model = len(datasets_clean)
-        nb_tfs_model = len(cl_tfs)
-
-    print("-- Dimensions : "+str(parameters["pad_to"])+
-        'bp x '+str(nb_datasets_model)+' datasets x '+
-        str(nb_tfs_model)+' TFs.')
-
-
-    # Parameters checking
-    # TODO CHECK THAT THOSE ARE INDEED NECESSARY
-    totkernel = parameters['nn_kernel_width_in_basepairs'] * 4
-    final_regionsize = int(parameters["pad_to"] / parameters['squish_factor'])
-    if final_regionsize < totkernel:
-        raise ValueError('Parameters error - Final region size after squishing must be higher than 4 * kernel_width_in_basepairs')
-    if final_regionsize % totkernel != 0:
-        raise ValueError('Parameters error - Final region size after squishing must be divisible by 4 * kernel_width_in_basepairs')
-
-
-    # Compute weights for loss
-    tf_weights = parameters["tf_weights"]
-    datasets_weights = parameters["datasets_weights"]
-    # Treat default
-    if tf_weights is None: tf_weights = [1] * nb_tfs_model
-    if datasets_weights is None: datasets_weights = [1] * nb_datasets_model
-    weighted_mse = cp.create_weighted_mse(datasets_weights, tf_weights)
-    # TODO : make a 2d matrix of weights instead, one weight for each specific tf+dataset pair. See draft code in the function source.
-
-
-    # Finally, create the atypeak model
-    model = cp.create_atypeak_model(
-        kernel_nb=parameters["nn_kernel_nb"],
-        kernel_width_in_basepairs=parameters["nn_kernel_width_in_basepairs"],
-        reg_coef_filter=parameters["nn_reg_coef_filter"],
-        pooling_factor=parameters["nn_pooling_factor"],
-        deep_dim=parameters["nn_deep_dim"],
-        region_size = int(parameters["pad_to"] / parameters['squish_factor']),
-        nb_datasets = nb_datasets_model, nb_tfs = nb_tfs_model,
-        optimizer = opti_custom, loss = weighted_mse
-        )
-
-    print('Model created.')
-
-    # Print summary of the model (only if not artificial)
-    if not parameters['use_artificial_data']  :
-        with open(root_path+'/data/output/model/model_'+parameters['cell_line']+'_architecture.txt','w') as fh:
-            model.summary(print_fn=lambda x: fh.write(x + '\n'))
-
-
-    return model
 
 # Prepare the model
-model = prepare_model_with_parameters(parameters)
+model = prepare.prepare_model_with_parameters(parameters,
+    nb_datasets_model = len(datasets_clean), nb_tfs_model = len(cl_tfs), root_path = root_path)
 
+
+# TODO Re-add this print
+# print("-- Dimensions : "+str(parameters["pad_to"])+
+#     'bp x '+str(nb_datasets_model)+' datasets x '+
+#     str(nb_tfs_model)+' TFs.')
+print('Model created.')
 """
 # Check initial weights
 wtest = model.get_weights()
@@ -253,13 +230,22 @@ print(wtest[0][0,0,0,0,1:4])
 
 # Control print of parameters
 print("-- PARAMETERS :")
-print(parameters)
-
+for k, v in parameters.items():
+   print('\t',k,'=', v)
 
 
 
 # ------------------------------ Training ------------------------------------ #
 # Train only if not loading a saved model
+
+
+# Path for saving the model later
+# Also used in processing the file for multithreading !
+if not parameters['use_artificial_data'] :
+    save_model_path = root_path+"/data/output/model/trained_model_"+parameters['cell_line']
+else:
+    save_model_path = root_path+"/data/output/model/trained_model_ARTIFICIAL"
+
 
 
 def train_model(model,parametrs):
@@ -270,23 +256,23 @@ def train_model(model,parametrs):
     Useful for grid search.
     """
 
-
-
+ 
 
     # NOTE This does not like custom optimizers it seems. To get around 
     # this problem, we re-create the model first, then load ONLY the weights !
     
     if parameters['load_saved_model']  :
-        model_path = root_path+'/data/output/model/trained_model_'+parameters['cell_line']+'.h5'
         try:
-            #model = load_model(model_path, custom_objects={"K": K, "optimizer":opti_custom}))
-            model.load_weights(model_path)
+            #model = load_model(save_model_path, custom_objects={"K": K, "optimizer":opti_custom}))
+            model.load_weights(save_model_path+".h5")
        
-        except OSError: raise FileNotFoundError("load_saved_model is True, but trained model was not found at "+model_path)
+        except OSError: raise FileNotFoundError("load_saved_model is True, but trained model was not found at "+save_model_path)
 
 
         # NOTE Due to a weird bug, I need to re-train the model for a few epochs after loading it.
         model.fit_generator(train_generator, verbose=0, steps_per_epoch = 1, epochs = 2, max_queue_size = 1)
+        # NOTE that issue is gone apparently ? Good !
+
 
         print('Loaded a saved model.')
 
@@ -329,14 +315,29 @@ def train_model(model,parametrs):
 
 
         # Save trained model and save the loss as text
-        if not parameters['use_artificial_data'] :
-            save_model_path = root_path+"/data/output/model/trained_model_"+parameters['cell_line']
-        else:
-            save_model_path = root_path+"/data/output/model/trained_model_ARTIFICIAL"
+
+
         loss_history = model.history.history["loss"]
         model.save(save_model_path+'.h5')
         np.savetxt(save_model_path+"_loss_history.txt", np.array(loss_history), delimiter=",")
         print('Model saved.')
+
+
+        # Check model was correctly saved
+        """
+        tmp_model = prepare_model_with_parameters(parameters)
+        tmp_model.load_weights(save_model_path)
+
+        # Check same prediction
+        for i in range(3):
+        before_batch = next(train_generator)[0]
+        before_raw = np.copy(before_batch[0,:,:,:,0])
+        prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+        prediction_tmp = tmp_model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
+
+        np.testing.assert_allclose(prediction, prediction_tmp)
+        """
+
 
 
     return model
@@ -354,8 +355,6 @@ print(wtest[0][0,0,0,0,1:4])
 
 
 
-
-
 ################################################################################
 ################################# DIAGNOSTIC ###################################
 ################################################################################
@@ -364,6 +363,17 @@ print(wtest[0][0,0,0,0,1:4])
 # Get some samples (3D tensor representations of CRMs, like, 200*48 or something)
 # This is used MANY times in the code, for Q-score, many diagnostics, and
 # abundance, normalization, etc.
+
+
+
+# TODO Add below at list_of_many_crms
+# To prevent an issue with threading and allow reuse of CRMs that were used in training, recreate a new train_generator
+# Rq : since CRMs are randomly chosen they can be re-seen, not exactly true
+train_generator = produce_data_generator(all_parameters_dict=parameters, matrices_id=all_matrices, get_matrix_func=get_matrix)
+
+
+
+
 start_genlist = time.time()
 list_of_many_crms = er.get_some_crms(train_generator,
     nb_of_batches_to_generate = parameters['nb_batches_generator_for_diag_list_of_many_crms'])
@@ -422,6 +432,11 @@ if parameters['perform_model_diagnosis']:
             prediction_2d_plot.get_figure().savefig(example_output_path + "example_crm_rebuilt_2dmax_"+str(i)+".pdf")
             anomaly_plot.savefig(example_output_path + "example_crm_anomaly_"+str(i)+".pdf")
 
+
+            
+            plt.close('all') # Close all figures
+
+
             i = i+1 # Increment counter
 
 
@@ -463,8 +478,7 @@ if parameters['perform_model_diagnosis']:
     median_anomaly_values_plot.get_figure().savefig(plot_output_path+'median_anomaly_score.pdf')
 
     
-
-
+    plt.close('all') # Close all figures
 
 
 
@@ -513,7 +527,7 @@ if parameters['perform_model_diagnosis']:
     print("Q-score evaluation results saved.")
 
 
-
+    plt.close('all') # Close all figures
     
     
 
@@ -574,13 +588,15 @@ if parameters['perform_model_diagnosis']:
         plt.figure(figsize=eval_figsize_small); dfp = sns.heatmap(w[:,:,0,0,filter_nb])
         #utils.plot_3d_matrix(w[:,:,:,0,filter_nb], figsize=(6,4))
         dfp.get_figure().savefig(kernel_output_path + "conv_kernel_datasets_"+str(filter_nb)+".pdf")
-    
+        plt.close('all') # Close all figures
+
     # TFs
     w = model.layers[5].get_weights()[0]
     for filter_nb in range(w.shape[-1]):
         #utils.plot_3d_matrix(w[:,0,:,:,filter_nb], figsize=(6,4))
         plt.figure(figsize=eval_figsize_small); tfp = sns.heatmap(w[0,0,:,:,filter_nb]) # 2D version only at the first X (often the same anyways)
         tfp.get_figure().savefig(kernel_output_path + "conv_kernel_tf_x0_"+str(filter_nb)+".pdf")
+        plt.close('all') # Close all figures
 
     # ----------------------- Visualize encoded representation ------------------- #
 
@@ -610,7 +626,7 @@ if parameters['perform_model_diagnosis']:
         x = np.mean(ex, axis = 0)
         plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0, annot = True, fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
         urfig.get_figure().savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
-
+        plt.close('all') # Close all figures
 
     """
     # Get an encoded representation for comparison (from the latest `before`, from above)
@@ -657,8 +673,10 @@ if parameters['perform_model_diagnosis']:
         a2 = a + geom_boxplot(position=position_dodge(1), width=0.5)
         b = ggplot(df, aes(x="brothers", y="rebuilt_value", group="brothers")) + scale_fill_grey() + geom_boxplot(width = 0.4)
 
-        a2.save(filename = plot_output_path+'artifical_data_systematisation_value_per_type.png', height=10, width=14, units = 'in', dpi=3200)
-        b.save(filename = plot_output_path+'artifical_data_systematisation_value_per_brothers.png', height=10, width=14, units = 'in', dpi=3200)
+        a2.save(filename = plot_output_path+'artifical_data_systematisation_value_per_type.png', height=10, width=14, units = 'in', dpi=400)
+        b.save(filename = plot_output_path+'artifical_data_systematisation_value_per_brothers.png', height=10, width=14, units = 'in', dpi=400)
+
+        plt.close('all') # Close all figures
 
 
 
@@ -668,362 +686,45 @@ if parameters['perform_model_diagnosis']:
 
 
 
-################################################################################
-################################## REAL DATA ###################################
-################################################################################
-
-
-# Switch : the user should calibrate with Q-score before processing the full data !
-# So in the parameters if the switch process_full_real_data is not on, it should exit here and there
-
-if not parameters["process_full_real_data"]:
-    print("The parameter `process_full_real_data` was set to False, presumably because this was a parameter calibration run.")
-    print("Hence, we stop before processing the real data.")
-    sys.exit()
-
-else:
-    print("Proceeding with real data. Make sure you have calibrated the model correctly, using notably the Q-score !")
-    print("Warning : this can be VERY long.")
-
-
-    ################################ DENOISING/PRODUCE REAL DATA #####################################
-    # Use the now-trained model on all data.
-
-    # Only do this on true data of course
-    if parameters['use_artificial_data'] :
-        raise ValueError("Error : process_full_real_data was set to True, but use_artificial_data is also True.")
-    else:
-        print("Writing result BED file for peaks, with anomaly score.")
-        print("This can be long (roughly 1 second for 10 CRMs with reasonably-sized queries, like 15 datasets x 15 TFs).")
-        print("On big queries (like 25*50) it can be 1 second per CRM.")
-
-
-        # Filepaths
-        root_output_bed_path = root_path + '/data/output/bed/' + parameters['cell_line']
-        
-
-        output_bed_path = root_output_bed_path + ".bed"
-        output_bed_merged = root_output_bed_path + "_merged_doublons.bed"
-
-        output_bed_path_normalized_poub = root_output_bed_path + "_raw_normalized_by_tf_DEBUG.bed"  
-
-        output_path_corr_group_normalized = root_output_bed_path + "_merged_doublons_normalized_corr_group.bed"
-        output_bed_path_final = root_output_bed_path + "_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
 
 
 
 
-        ### Raw file production
-
-        # Produce a raw, non-normalized file for this cell line
-        print('Producing scored BED file :',output_bed_path)
-        start_prod = time.time()
-        er.produce_result_file(all_matrices, output_bed_path,
-            model, get_matrix, parameters, datasets_clean, cl_tfs)
-        end_prod = time.time()
-        total_time_prod = end_prod-start_prod
-        print('Processed BED file produced in',str(total_time_prod),'seconds.')
-
-        # Put mean score for doublons
-        utils.print_merge_doublons(bedfilepath = output_bed_path, outputpath = output_bed_merged)
 
 
-        # --------- Normalization ----------
+        # ------ Informative plots for result checking
+        # TODO STOCK AND EXPORT ALL THESE PLOTS
 
+        # Those are CONTROL Plots. Explain that.
+        # They are not done on our diagnostic, they just allow you to check the results
 
-        # For reference, get the scores per tf and per dataset for the RAW data, before normalization
-        scores_by_tf_df_raw, scores_by_dataset_df_raw = utils.normalize_result_file_score_by_tf(output_bed_merged,
-            cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub)
+        # -Including : Compare to the average CRM
+        # Produce a picture of the average CRM for later comparisons
 
-
-
-
+        # TODO : THOSE ARE MAYBE ALREADY CALCULATED BY THE Q-SCORE. MERGE THIS CODE WITH THE Q-SCORE CODE TO AVOID REDUNDANCIES ?
 
         """
-        CAREFUL, AT TIME OF WRITING THIS I OVERWRITE scores_by_tf_df AND scores_by_dataset_df LATER. DECIDE WHICH ONE TO OUTPUT.
-        The last one I think ? After my normalization ?
-
-        Or I can just keep both and print both...
-        I have a fig about this now
+        Explain this part is just diagnostic on the data, not on the model results
         """
 
 
 
-        ### First normalize by correlation group
+        average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
 
-        # Estimate corr group scaling factors
-        corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(model = model,
-            all_datasets = datasets_clean, all_tfs = cl_tfs, list_of_many_crms = list_of_many_crms,
-            crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
-            outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.tsv")
 
-        # Apply them
-        utils.normalize_result_file_with_coefs_dict(output_bed_merged,
-            corr_group_scaling_factor_dict, cl_name = parameters['cell_line'],
-            outfilepath = output_path_corr_group_normalized)
+        """
+        # Careful : some horizontal "ghosting" might be due to summed crumbing. TODO NOTE IN PAPER !!!! IN THE FIGURE LEGENDS
+        """
 
+        average_crm_fig.savefig(plot_output_path+'average_crm_2d.pdf')
+        tf_corr_fig.savefig(plot_output_path+'tf_correlation_matrix.pdf')
+        dataset_corr_fig.savefig(plot_output_path+'dataset_correlation_matrix.pdf')
+        tf_abundance_fig.savefig(plot_output_path+'tf_abundance_total_basepairs.pdf')
+        dataset_abundance_fig.savefig(plot_output_path+'dataset_abundance_total_basepairs.pdf')
 
-        ### Then, finally normalize the score by TF, under the assumption that no TF is better than another.
-        scores_by_tf_df, scores_by_dataset_df = utils.normalize_result_file_score_by_tf(output_path_corr_group_normalized,
-            cl_name = parameters['cell_line'], outfilepath = output_bed_path_final)
+        plt.close('all') # Close all figures
 
-        # This will be used to quantify the effect of the normalization
 
 
 
-        # A new result file labeled "FINAL" has been produced.
-        print('Processing complete.')
 
-
-
-        # ----------------------------- Diagnostic plots ----------------------------- #
-
-        if parameters['perform_real_data_diagnosis']:
-
-            print('Performing diagnostic plots...')
-
-            # Only if not artificial data.
-            # TODO : those could be useful in artificial as well
-
-
-            # -------- Median of score by TF
-
-            # By TF
-            fig, ax = plt.subplots(figsize=(10, 8))
-            sub_df = scores_by_tf_df.loc[:,['count','50pc']]
-            sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
-            for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-            plt.savefig(plot_output_path+'scores_median_by_tf_after_corrgroup_normalization_only.pdf')
-
-            # By dataset
-            fig, ax = plt.subplots(figsize=(10, 8))
-            sub_df = scores_by_dataset_df.loc[:,['count','50pc']]
-            sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
-            for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-            plt.savefig(plot_output_path+'scores_median_by_dataset_after_corrgroup_normalization_only.pdf')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            ## Quantify effect of normalization
-
-            sub_raw = scores_by_tf_df_raw.loc[:,['mean']]
-            sub_raw.columns = ['mean_raw_before_corrgroup_normalization']
-            sub_after = scores_by_tf_df.loc[:,['mean']]
-            sub_after.columns = ['mean_after_corrgroup_normalization']
-            df_cur = sub_raw.join(sub_after)
-            df_cur = df_cur.reset_index()
-            #df_cur = pd.merge(sub_raw, sub_after, on="tf")
-            #df_cur = sub_raw.to_frame(name = 'mean_raw_before_norm').join(sub_after.to_frame(name='mean_after_norm'))
-            df_cur_melted = df_cur.melt(id_vars=['tf'], value_vars=['mean_raw_before_corrgroup_normalization','mean_after_corrgroup_normalization'])
-            p = ggplot(df_cur_melted, aes(x = "tf", y= "value", fill = "variable")) + geom_bar(stat="identity", width=.7, position = "dodge") + theme(legend_position = "top")
-            p.save(plot_output_path+"scores_mean_by_tf_before_and_after_corrgroup_normalization.pdf", height=8, width=16, units = 'in', dpi=3200)
-
-            # TODO Same for datasets
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            # ------ Informative plots for result checking
-            # TODO STOCK AND EXPORT ALL THESE PLOTS
-
-            # Those are CONTROL Plots. Explain that.
-            # They are not done on our diagnostic, they just allow you to check the results
-
-            # -Including : Compare to the average CRM
-            # Produce a picture of the average CRM for later comparisons
-
-            # TODO : THOSE ARE MAYBE ALREADY CALCULATED BY THE Q-SCORE. MERGE THIS CODE WITH THE Q-SCORE CODE TO AVOID REDUNDANCIES ?
-
-
-
-
-            average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
-
-
-
-
-
-
-
-
-            """
-            # Careful : some horizontal "ghosting" might be due to summed crumbing. TODO NOTE IN PAPER !!!! IN THE FIGURE LEGENDS
-            """
-
-
-
-
-
-
-
-
-
-
-
-            average_crm_fig.savefig(plot_output_path+'average_crm_2d.pdf')
-            tf_corr_fig.savefig(plot_output_path+'tf_correlation_matrix.pdf')
-            dataset_corr_fig.savefig(plot_output_path+'dataset_correlation_matrix.pdf')
-            tf_abundance_fig.savefig(plot_output_path+'tf_abundance_total_basepairs.pdf')
-            dataset_abundance_fig.savefig(plot_output_path+'dataset_abundance_total_basepairs.pdf')
-
-
-
-
-            # ----------------------- Scores per CRM  ------------------------- #
-            # Computing score distribution per number of peaks in CRMs
-
-            # VERY IMPORTANT PLOTS
-
-            
-
-            # The CRM file path
-            CRM_FILE = parameters["CRM_FILE"] 
-
-
-
-
-            score_distrib, avg_score_crm, max_score_crm = er.plot_score_per_crm_density(output_bed_path, CRM_FILE)
-
-            score_distrib.save(plot_output_path+'score_distribution_raw.pdf')
-            avg_score_crm.save(plot_output_path+'average_score_per_crm_density_raw.pdf')
-            max_score_crm.save(plot_output_path+'max_score_per_crm_density_raw.pdf')
-
-
-
-            # REDO THIS ON NORMALIZED FINAL FILE
-            # so after tf normalization
-            print("... in the final normalized file.")
-            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_final, CRM_FILE)
-            score_distrib_tfnorm.save(plot_output_path+'score_distribution_after_final_normalization.pdf')
-            avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_after_final_normalization.pdf')
-            max_score_crm_tfnorm.save(plot_output_path+'max_score_per_crm_density_after_final_normalization.pdf')
-
-
-
-
-            # ----------------- Scores when known cofactors (or known non-cofactors) are present
-
-            print("Retrieving scores for specified TF pairs and estimating correlation groups...")
-
-
-
-
-            # NOTE We work on FINAL NORMALIZED scores after both normalizations. TODO SAY SO IN PAPER FIGURES AND IN DEBUG MESSAGES and/or comments here !!!!!
-
-            # TODO CHECK WHICH FILE I USE PRECISELY
-
-
-
-            tfs_to_plot = parameters['tf_pairs']
-
-            tf_alone_both_output_path = plot_output_path + "tf_pairs_alone_both/"
-            if not os.path.exists(tf_alone_both_output_path): os.makedirs(tf_alone_both_output_path)
-
-            for pair in tfs_to_plot:
-                try:
-                # TODO CAREFUL ABOUT CASE !!
-
-
-                    pair = ["sfmbt1","e2f1"]
-
-                    tf1, tf2 = pair
-                    
-                    
-                    
-                    
-                    # RE-enable this
-                    #p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_final, CRM_FILE)
-                    
-                    
-                    
-                    
-                    
-                    p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_merged, CRM_FILE)
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    p.save(tf_alone_both_output_path+"tf_alone_both_"+tf1+"_"+tf2+".pdf")
-                except:
-                    print("Error fetching the pair : "+str(pair))
-                    print("Ignoring.")
-
-
-
-            # ----- Correlation group estimation
-            # Try to estimate the correlation groups learned by the model for certain select sources (TF+dataset pair) by looking at what kind of phantoms are added by the model
-
-            corrgroup_estim_output_path = plot_output_path + "estimated_corr_groups/"
-            if not os.path.exists(corrgroup_estim_output_path): os.makedirs(corrgroup_estim_output_path)
-
-            for combi in parameters['estimate_corr_group_for']:
-                try:
-                    dataset, tf = combi
-                    
-                    output_path_estimation = corrgroup_estim_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
-                    
-                    fig, _ = er.estimate_corr_group_for_combi(dataset, tf,
-                        all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
-                        crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
-                    fig.get_figure().savefig(output_path_estimation)
-                     
-                     
-                except:
-                    print("Error estimating for : "+str(combi))
-                    print("Ignoring.")

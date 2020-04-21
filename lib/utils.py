@@ -19,6 +19,35 @@ from lib import artificial_data
 ################################################################################
 
 
+
+def look_here_stupid(matrix, crumb = 0.1):
+    """
+    To counter sparsity, we add crumbs to matrices of peak presence.
+    Put a crumb (default 0.1) on all nucleotides where a peak was found in at
+    least one dataset. The crumb is much lower than true peak score, and
+    prevents the model from always learning zeroes.
+    """
+
+    if len(matrix.shape) != 3:
+        raise TypeError('ERROR - Trying to crumb a non-3D matrix.')
+
+    result = matrix.copy()
+
+    # Get the indices of all non-zero elements of the array
+    nonzero = np.nonzero(matrix)
+
+    for i in range(nonzero[0].shape[0]):
+        x,y,z = nonzero[0][i], nonzero[1][i], nonzero[2][i]
+        val = matrix[x,y,z]
+
+        # Add crumbs
+        result[x,y,:] += crumb * val # Datasets
+        result[x,:,z] += crumb * val # Transcription factors
+
+    return result
+
+
+
 def zeropad(arr, pad_width):
     """
     Pad array with zeros.
@@ -108,13 +137,12 @@ def plot_3d_matrix(mat, figsize=(10,6),
         return
 
     if np.min(mat) == np.max(mat):
-        print('ERROR - All values in the matrix are the same (min and max are equal). Plotting is useless.')
-        print('This matrix is just a repetition of ['+str(np.max(mat))+'] across a shape of '+str(mat.shape)+'.')
+        print('NOTE - All values in the matrix are equal to ['+str(np.max(mat))+'] across a shape of '+str(mat.shape)+'. Plotting is useless.')
         return
 
     if (np.min(mat) < 0 or np.max(mat) > 1) and standard_scale:
-        print('ERROR - You cannot use the standard scale with values below [0;1].')
-        print('Defaulting to a relative scale between the min and max value.')
+        #print('NOTE - You cannot use the standard scale with values below [0;1].')
+        #print('Defaulting to a relative scale between the min and max value.')
         standard_scale = False
 
     # Create the x, y, and z coordinate arrays. Use numpy's broadcasting.

@@ -22,8 +22,15 @@ import matplotlib.pyplot as plt
 from plotnine import ggplot, aes, geom_histogram, scale_fill_grey, geom_violin, geom_boxplot, position_dodge, theme
 
 import lib.artificial_data as ad
-import lib.model_atypeak as cp
+#import lib.model_atypeak as cp
 from lib import utils
+
+
+"""
+
+MUST NOT IMPORT KERAS HERE FOR MULTIPROCESSING REASONS !!!!!!!!!!!
+
+"""
 
 
 ################################################################################
@@ -60,11 +67,184 @@ def anomaly(before, prediction):
 
 
 
-def produce_result_file(all_matrices, output_path, model,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def produce_result_for_matrix(m,
+    model, get_matrix_method, parameters, datasets_clean, cl_tfs):
+    """
+    Wrapper to produce a result for one matrix. Used in the main loop.
+    """
+    # TODO Maybe add the possibility to supply a custom generator ?
+
+
+
+
+
+    START = time.time()
+
+
+    # Collect original matrix and lines
+    current_matrix, origin_data_file, crm_start = get_matrix_method(m, return_data_lines = True)
+
+    MATRIX_COLLECTED = time.time() 
+
+    # Pad the matrix (much like we do in model_atypeak.generator_unsparse)
+    # TODO The method must also return crm_length then for coordinate correction !
+    crm_length = current_matrix.shape[0]
+    current_matrix_padded = np.pad(current_matrix, pad_width = ((parameters["pad_to"] - current_matrix.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0)
+
+    squished_matrix = utils.squish(current_matrix_padded[:,:,:,np.newaxis])
+
+    MATRIX_PADDED = time.time()
+
+    # Compute result and anomaly
+    
+    prediction = model.predict(squished_matrix[np.newaxis,:,:,:,:])
+    
+
+    RESULT_COMPUTED_MODEL = time.time()
+
+    result_matrix = utils.stretch(prediction[0,:,:,:,:])
+
+    # This uses directly the anomaly function defined in this file
+    anomaly_matrix = anomaly(current_matrix_padded, result_matrix[:,:,:,0])
+
+    ANOMALY =  time.time()
+
+    # Now write to the result BED the current peaks with their newfound anomaly score
+    result = utils.produce_result_bed(origin_data_file, anomaly_matrix,
+                                        datasets_clean, cl_tfs,
+                                        crm_start, crm_length,
+                                        debug_print = False)
+    
+    RESULT_BED_COMPUTED = time.time() 
+
+
+    #print("\nMATRIX_COLLECTED",MATRIX_COLLECTED-START)
+    #print("MATRIX_PADDED",MATRIX_PADDED-MATRIX_COLLECTED)
+    #print("RESULT_COMPUTED_MODEL",RESULT_COMPUTED_MODEL-MATRIX_PADDED)
+    #print("ANOMALY",ANOMALY-RESULT_COMPUTED_MODEL)
+    #print("RESULT_BED_COMPUTED",RESULT_BED_COMPUTED-ANOMALY)
+
+
+    # WARNING : This is 1 - anomaly, so the score is actually high for good peaks !!
+    return result
+
+
+
+import sys, time
+import numpy as np
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+
+
+class MonitoredProcessPoolExecutor(ProcessPoolExecutor):
+    """
+    A class to encapsulate a ProcessPoolExecutor but monitoring the current number of active workers
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._running_workers = 0
+
+    def submit(self, *args, **kwargs):
+        future = super().submit(*args, **kwargs)
+        self._running_workers += 1
+        future.add_done_callback(self._worker_is_done)
+        return future
+
+    def _worker_is_done(self, future):
+        self._running_workers -= 1
+
+    def get_pool_usage(self):
+        return self._running_workers
+
+
+
+
+def result_file_worker(minibatch, save_model_path,
+    get_matrix_method, parameters, datasets_clean, cl_tfs,
+    call_to_prepare_model,result_queue):
+
+
+    # Please don't send me console outputs
+    import os, sys
+    f = open(os.devnull, 'w')
+    from contextlib import redirect_stdout, redirect_stderr
+
+    with redirect_stdout(f):
+        with redirect_stderr(f):
+            # Create keras session here for the worker
+            from keras.models import load_model
+            import keras.backend as K
+            import tensorflow as tf
+            #K.set_session(tf.Session())
+            #K.set_session(tf.compat.v1.Session())
+
+            #model = load_model(model_path)
+            # Must solve the reloading problems first ! Oa=kay done ????
+            model = call_to_prepare_model()
+            model.load_weights(save_model_path+".h5") # Do not forget to add the ".h5" !! 
+
+    
+
+    my_produce_result_function_for_matrix = functools.partial(produce_result_for_matrix, model=model,
+        get_matrix_method=get_matrix_method,
+        parameters=parameters, datasets_clean=datasets_clean, cl_tfs=cl_tfs)
+
+
+    for m in minibatch:
+        my_result = my_produce_result_function_for_matrix(m)
+        result_queue.put(my_result)
+
+
+
+
+def produce_result_file(all_matrices, output_path, #model,
     get_matrix_method, parameters,
     datasets_clean, cl_tfs,
     add_track_header = True,
-    thread_nb = 8):
+    nb_threads =1,
+    save_model_path = None,
+    call_to_prepare_model = None):
     """
     Will take all CRM whose ID is in all_matrices, rebuild them with the
     provided model, then compute the anomaly score and write the result in a BED
@@ -76,38 +256,9 @@ def produce_result_file(all_matrices, output_path, model,
     if add_track_header : rf.write('track name ='+parameters['cell_line']+' description="'+parameters['cell_line']+' peaks with anomaly score" useScore=1'+'\n')
 
 
-
-    def produce_result_for_matrix(m):
-        """
-        Wrapper to produce a result for one matrix. Used in the main loop.
-        """
-        # TODO Maybe add the possibility to supply a custom generator ?
-
-        # Collect original matrix and lines
-        current_matrix, origin_data_file, crm_start = get_matrix_method(m, return_data_lines = True)
-
-        # Pad the matrix (much like we do in model_atypeak.generator_unsparse)
-        # TODO The method must also return crm_length then for coordinate correction !
-        crm_length = current_matrix.shape[0]
-        current_matrix_padded = np.pad(current_matrix, pad_width = ((parameters["pad_to"] - current_matrix.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0)
- 
-        # Compute result and anomaly
-        squished_matrix = utils.squish(current_matrix_padded[:,:,:,np.newaxis])
-        prediction = model.predict(squished_matrix[np.newaxis,:,:,:,:])
-        result_matrix = utils.stretch(prediction[0,:,:,:,:])
-
-        # This uses directly the anomaly function defined in this file
-        anomaly_matrix = anomaly(current_matrix_padded, result_matrix[:,:,:,0])
-
-        # Now write to the result BED the current peaks with their newfound anomaly score
-        result = utils.produce_result_bed(origin_data_file, anomaly_matrix,
-                                            datasets_clean, cl_tfs,
-                                            crm_start, crm_length,
-                                            debug_print = False)
-
-
-        # WARNING : This is 1 - anomaly, so the score is actually high for good peaks !!
-        return result
+    """
+    TODO MAKE model OPTIONAL IF MULTITHREADED AND MAKE save_model_path MANDATORY IF MULTITHREADED
+    """
 
 
 
@@ -116,21 +267,147 @@ def produce_result_file(all_matrices, output_path, model,
 
     print('Beginning processing...')
 
-    cnt = 0
-    for m in all_matrices:
 
-        result += produce_result_for_matrix(m)
+    
+    
+    # NOTE I already tried multiprocessing the matrix collection and it was not faster
+    # To use multiprocessing for the rest, namely the Keras model, recall that we would need
+    # to reload and recreate the model in each child process, we cannot pass a pickled model
+    # NOTE WAIT YOU IDIOT THAT IS NOT IT. CHECK THE BENCHMARK ABOVE. THERE MIGHT BE 
+    # ROOM FOR IMPROVEMENT, perhaps by distributing the paddings and anomaly computings !?
+    # No wait again, it seems the model itself is actually the bottleneck ????
+    """
+    THIS IS IMPORTANT AND CAN AFFECT THE PAPER because I wrote such things in the paper !! MUST DETERMINE EXACTLY WHICH PART IS THE BOTTLENECK !!!!
 
-        # Progress display
-        sys.stdout.write("\r" +"Processed CRM nb. : " + str(cnt+1)+" / "+str(len(all_matrices)))
-        sys.stdout.flush()
-        cnt += 1
+    The time taking by generating list_of_many_CRMs suggests that the generator was the problem though !
+    
+    MUST CHECK THIS CAREFULLY !!!
 
-    # Write the final file
-    for line in result: rf.write(line+'\n')
-    rf.close()
-    print(" -- Done.")
 
+    Okay. The revised picture that emerges is that here matrix collection and model prediction
+    account each for half of the time (or more 1/2-2/3), with the rest negligible.
+        This should be said in the paper !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    AND NEW TESTING SHOWS THAT MATRIX COLLECTION CAN BE MULTIPROCESSED ALITTLE. SO I RETRY.
+
+    NOTE : IF THE PROCESSING TIMES ARE SHORTENED BY THIS, SAY SO IN PAPER AND CHANGE THE WARNING PRINTED IN THE CODE !!
+
+    """
+
+
+    
+
+    
+    if nb_threads < 2:
+
+        print("Mono threaded")
+
+        # Create keras session here for the worker
+        from keras.models import load_model
+        import keras.backend as K
+        import tensorflow as tf
+        import keras
+
+        import lib.model_atypeak as cp
+
+        K.set_session(tf.Session())
+        model = call_to_prepare_model()
+        model.load_weights(save_model_path+".h5") # Do not forget to add the ".h5" !! 
+
+
+        my_produce_result_function_for_matrix = functools.partial(produce_result_for_matrix,
+            model=model, get_matrix_method=get_matrix_method, parameters=parameters, datasets_clean=datasets_clean, cl_tfs=cl_tfs)
+
+        result = list()
+
+        cnt = 1
+        for m in all_matrices:
+
+            #result += produce_result_for_matrix(m)
+            result += my_produce_result_function_for_matrix(m)
+
+            # Progress display
+            sys.stdout.write("\r" +"Processed CRM nb. : " + str(cnt)+" / "+str(len(all_matrices)))
+            sys.stdout.flush()
+            cnt += 1
+    
+
+        # Write the final file
+        for line in result: rf.write(line+'\n')
+        rf.close()
+        print(" -- Done.")
+
+
+    if nb_threads >= 2:
+        
+        print("Multi threaded")
+
+        mana = multiprocessing.Manager()
+
+        result_queue = mana.Queue()
+
+
+        #NB_PROCESSES = 7
+        pool = MonitoredProcessPoolExecutor(nb_threads)
+
+
+        # Split into as many batches as there are child processes 
+        minibatches = np.array_split(np.array(all_matrices), nb_threads)
+
+
+        args = {
+            "save_model_path":save_model_path,
+            "get_matrix_method":get_matrix_method,
+            "parameters":parameters, 
+            "datasets_clean":datasets_clean,
+            "cl_tfs":cl_tfs,
+            "call_to_prepare_model":call_to_prepare_model,
+            "result_queue":result_queue }
+
+        """
+        for minibatch in minibatches:
+            result_file_worker(minibatch = minibatches[0], **args)
+        """
+        
+        import subprocess
+
+        for i in range(nb_threads):
+            pool.submit(result_file_worker, minibatch = minibatches[i], **args )
+
+       
+
+        # Control print while there are still active workers
+        while pool.get_pool_usage() > 0:
+            time.sleep(0.05) # Prevent a flurry of messages
+            cnt = result_queue.qsize()
+            sys.stdout.write("\r" +"Processed CRMs currently : "+str(cnt)+" / "+str(len(all_matrices)))
+            sys.stdout.flush()
+
+        # Now empty the queue
+        while True:
+            if not result_queue.empty():
+                partial_result = result_queue.get()
+                for line in partial_result: rf.write(line+'\n')
+            else:
+                print(" -- Done")
+                rf.close()
+                break
+        del result_queue
+    """
+    MUST COMPARE SINGLE THREADED AND MULTI THREADED OUTPUTS AFTER BEDTOOLS SORTING !
+    """
+
+
+
+
+
+
+
+
+
+    
+ 
 
 
 
@@ -189,8 +466,8 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
     #full_crm_3d = np.stack([[0*full_crm_2d]*210 + [full_crm_2d]*10 + [0*full_crm_2d]*100], axis=0).astype('float64')
     # TODO UNHARDCODE THE 320 ABOVE !!
 
-    if use_crumbing: full_crm_3d = cp.look_here_stupid(full_crm_3d)
-    #if use_crumbing: full_crm_3d = cp.look_here_stupid(full_crm_3d[0,...])
+    if use_crumbing: full_crm_3d = utils.look_here_stupid(full_crm_3d)
+    #if use_crumbing: full_crm_3d = utils.look_here_stupid(full_crm_3d[0,...])
 
     predictionf = model.predict(full_crm_3d[np.newaxis,...,np.newaxis])[0,:,:,:,0]
     prediction_2df = np.max(predictionf, axis=0) # 2D - mean along region axis
@@ -221,7 +498,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # Use a value of 10 or 100 to force MSE to show groups ??
         # No use 1 instead to prevent affine pbs
         x[:,curr_dataset_id, curr_tf_id] = BEFORE_VALUE
-        if use_crumbing: x = cp.look_here_stupid(x) # Add crumbing
+        if use_crumbing: x = utils.look_here_stupid(x) # Add crumbing
         before_2d_p = np.mean(x, axis=0)
             
         xp = utils.squish(x, factor = squish_factor)
@@ -409,7 +686,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
 
         full_crm_3d_others = np.stack([before_others]*320, axis=0).astype('float64') # TODO UNHARDCODE THE 320 ABOVE !!
-        #if use_crumbing: full_crm_3d = cp.look_here_stupid(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
+        #if use_crumbing: full_crm_3d = utils.look_here_stupid(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
         predictionf_others = model.predict(full_crm_3d_others[np.newaxis,...,np.newaxis])[0,:,:,:,0]
         prediction_2df_others = np.mean(predictionf_others, axis=0) # 2D - mean along region axis
         
@@ -557,7 +834,7 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
     x = np.zeros((crm_length, len(all_datasets), len(all_tfs)))
     x[:,curr_dataset_id, curr_tf_id] = before_value
 
-    if use_crumbing: x = cp.look_here_stupid(x) # Add crumbing
+    if use_crumbing: x = utils.look_here_stupid(x) # Add crumbing
 
     # See what the model rebuilds
     xp = utils.squish(x, factor = squish_factor)
@@ -818,9 +1095,9 @@ def calculate_q_score(model, list_of_many_befores,
 
 
     # Fix for truncated axis tick labels
-    qscore_plot.figure.tight_layout()
-    corr_plot.figure.tight_layout()
-    posvar_x_res_plot.figure.tight_layout()
+    qscore_plot.tight_layout()
+    corr_plot.tight_layout()
+    posvar_x_res_plot.tight_layout()
 
 
     return (q, qscore_plot, corr_plot, posvar_x_res_plot)
