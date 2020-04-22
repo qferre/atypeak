@@ -28,6 +28,8 @@ import lib.artificial_data as ad    # Trivial data for control
 import lib.result_eval as er        # Result production and evaluation
 import lib.utils as utils           # Miscellaneous
 
+import lib.prepare as prepare 
+
 ############################# PARAMETERS AND SETUP #############################
 
 root_path = os.path.dirname(os.path.realpath(__file__))
@@ -156,8 +158,12 @@ EVEYRHTING ABOVE IS IDENTICAL TO TRAIN.PY, functionalize it !!!!!!!!!
 
 
 
-
-
+"""
+IMPORTANT NOTE
+To ensure multiprocessing success, it is imperative that keras or tensorflow
+are not imported in the main process.py code so as not to create a Session !
+This must be done only by the subprocesses !
+"""
 
 
 
@@ -280,15 +286,17 @@ else:
         # import importlib
         # importlib.reload(er)
 
+        # TODO Make number of threads a parameter
+
+        # TODO it's actually number of processes and optimal might not be 7 ! Try several !
+
         import functools
-        partial_call_to_prepare_model = functools.partial(prepare.prepare_model_with_parameters(
-            parameters = parameters, nb_datasets_model = len(datasets_clean), nb_tfs_model = len(cl_tfs), root_path = root_path))
 
         start_prod = time.time()
         er.produce_result_file(all_matrices[0:1000], output_bed_path+"_MULTITHREAD",
-            get_matrix, parameters, datasets_clean, cl_tfs,
-            nb_threads = 7, save_model_path = save_model_path,
-            call_to_prepare_model = partial_call_to_prepare_model)
+            get_matrix, parameters, prepare.prepare_model_with_parameters,
+            datasets_clean, cl_tfs,
+            nb_threads = 1, save_model_path = save_model_path)
         end_prod = time.time()
         total_time_prod = end_prod-start_prod
         print('Multithread done in',str(total_time_prod),'seconds.')
@@ -296,6 +304,15 @@ else:
 
         """
         WARNING : TOO LARGE MODELS MAY CONSUME TOO MUCH MEMORY WHEN MULTITHREADED ???
+        """
+
+
+        """
+        APPARENTLY TENSORFLOW 2 IS MUCH SLOWER, SO GO BACK TO TENSORFLOW 1 AND USE MULTITHREADING
+        FOR BEST SPEED. SO I DID WELL TO KEEP BOTH CODES, mention we can us both TF 1 or 2 in the readme
+
+        WAIT. TF2 USES ALL THREADS BY DEFAULT AND IS SLOWER ? RAM SHENANIGANS MAYBE ? TRY ON MY VM !
+        I could put it on the readme along with "as of April 2020, we recommend..."
         """
 
 
@@ -646,3 +663,6 @@ else:
                 except:
                     print("Error estimating for : "+str(combi))
                     print("Ignoring.")
+
+
+print("Data succesfully processed !")

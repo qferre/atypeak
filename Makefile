@@ -34,8 +34,6 @@ prepare: decompress copybin intersect convert dictionaries split
 
 # Run the model with the parameters specified in parameters.yaml
 run: train process
-	conda activate atypeak
-	python3 main.py
 
 train:
 	conda activate atypeak

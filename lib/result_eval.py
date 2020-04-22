@@ -202,7 +202,7 @@ class MonitoredProcessPoolExecutor(ProcessPoolExecutor):
 
 def result_file_worker(minibatch, save_model_path,
     get_matrix_method, parameters, datasets_clean, cl_tfs,
-    call_to_prepare_model,result_queue):
+    model_prepare_function,result_queue):
 
 
     # Please don't send me console outputs
@@ -212,6 +212,8 @@ def result_file_worker(minibatch, save_model_path,
 
     with redirect_stdout(f):
         with redirect_stderr(f):
+
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # No TF logs unless errors
             # Create keras session here for the worker
             from keras.models import load_model
             import keras.backend as K
@@ -221,7 +223,7 @@ def result_file_worker(minibatch, save_model_path,
 
             #model = load_model(model_path)
             # Must solve the reloading problems first ! Oa=kay done ????
-            model = call_to_prepare_model()
+            model = model_prepare_function(parameters, len(datasets_clean), len(cl_tfs))
             model.load_weights(save_model_path+".h5") # Do not forget to add the ".h5" !! 
 
     
@@ -239,12 +241,11 @@ def result_file_worker(minibatch, save_model_path,
 
 
 def produce_result_file(all_matrices, output_path, #model,
-    get_matrix_method, parameters,
+    get_matrix_method, parameters, model_prepare_function,
     datasets_clean, cl_tfs,
     add_track_header = True,
     nb_threads =1,
-    save_model_path = None,
-    call_to_prepare_model = None):
+    save_model_path = None):
     """
     Will take all CRM whose ID is in all_matrices, rebuild them with the
     provided model, then compute the anomaly score and write the result in a BED
@@ -259,6 +260,10 @@ def produce_result_file(all_matrices, output_path, #model,
     """
     TODO MAKE model OPTIONAL IF MULTITHREADED AND MAKE save_model_path MANDATORY IF MULTITHREADED
     """
+
+    # Get the model preparation call ?
+    
+
 
 
 
@@ -311,8 +316,8 @@ def produce_result_file(all_matrices, output_path, #model,
 
         import lib.model_atypeak as cp
 
-        K.set_session(tf.Session())
-        model = call_to_prepare_model()
+        #K.set_session(tf.Session())
+        model = model_prepare_function(parameters, len(datasets_clean), len(cl_tfs))
         model.load_weights(save_model_path+".h5") # Do not forget to add the ".h5" !! 
 
 
@@ -362,7 +367,7 @@ def produce_result_file(all_matrices, output_path, #model,
             "parameters":parameters, 
             "datasets_clean":datasets_clean,
             "cl_tfs":cl_tfs,
-            "call_to_prepare_model":call_to_prepare_model,
+            "model_prepare_function":model_prepare_function,
             "result_queue":result_queue }
 
         """

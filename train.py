@@ -213,7 +213,8 @@ for i in range(3):
 
 # Prepare the model
 model = prepare.prepare_model_with_parameters(parameters,
-    nb_datasets_model = len(datasets_clean), nb_tfs_model = len(cl_tfs), root_path = root_path)
+    nb_datasets_model = len(datasets_clean), nb_tfs_model = len(cl_tfs),
+     root_path = root_path) # Print model parameters
 
 
 # TODO Re-add this print
@@ -609,12 +610,13 @@ if parameters['perform_model_diagnosis']:
         print("ENCODED_LAYER_NUMBER not set to the encoded dimension. Urexamples will be on a different dimension.")
     # TODO Replace with something like model.get_layer("encoded")
 
-
+    print("Computing ur-examples. Can be long...")
     urexamples = cp.compute_max_activating_example_across_layer(model, random_state = 42,
                                 selected_layer = ENCODED_LAYER_NUMBER, output_of_layer_select_this_dim = 2,
                                 learning_rate = 1, nb_steps_gradient_ascent = 50,
-                                blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5)
-
+                                blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5,
+                                debug_print = False)
+    
 
     urexample_output_path = plot_output_path + "urexample_encoded_dim/"
     if not os.path.exists(urexample_output_path): os.makedirs(urexample_output_path)
@@ -725,6 +727,6 @@ if parameters['perform_model_diagnosis']:
         plt.close('all') # Close all figures
 
 
-
+print("Model succesfully trained and diagnosed !")
 
 

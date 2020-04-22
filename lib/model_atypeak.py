@@ -442,7 +442,8 @@ def compute_max_activating_example_across_layer(model,
                             random_state = 42,
                             nb_steps_gradient_ascent = 20,
                             blurStdX = 0, blurStdY=0, blurStdZ=0, blurEvery = 4,
-                            ur_example_input_shape = None
+                            ur_example_input_shape = None,
+                            debug_print = True
                             ):
     """
     model : a Keras model
