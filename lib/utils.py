@@ -11,18 +11,18 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from lib import artificial_data
-
 
 ################################################################################
 # ----------------------------- Matrix utilities ----------------------------- #
 ################################################################################
 
 
-
-def look_here_stupid(matrix, crumb = 0.1):
+def add_crumbing(matrix, crumb = 0.1):
     """
     To counter sparsity, we add crumbs to matrices of peak presence.
+
+    This helps the model learn, otherwise it often rebuilds "full zeroes"
+
     Put a crumb (default 0.1) on all nucleotides where a peak was found in at
     least one dataset. The crumb is much lower than true peak score, and
     prevents the model from always learning zeroes.
@@ -45,7 +45,6 @@ def look_here_stupid(matrix, crumb = 0.1):
         result[x,:,z] += crumb * val # Transcription factors
 
     return result
-
 
 
 def zeropad(arr, pad_width):
@@ -231,11 +230,6 @@ def plot_3d_matrix(mat, figsize=(10,6),
 
 
 
-
-
-
-
-
 ################################################################################
 # ----------------------------- File processing ----------------------------- #
 ################################################################################
@@ -301,7 +295,7 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
         result = (str(peak[4])+'\t'+str(xmin_original)+'\t'+str(xmax_original)+'\t'+
             peak[3]+'.'+peak[2]+'.'+peak[0]+'\t'+ #peak[the dataset]+'.'+peak[the tf]+'.'+peak[the cell line]+'\t'+
             str(anomaly_score)+'\t'+'.')
-        # TODO Add gregariousness : how many peaks in the same row, column, or entire CRM.
+        # TODO Maybe add gregariousness, ie. how many peaks in the same row, column, or entire CRM.
         # Also keep the MACS score and the peak center ?
 
         result_bed.append(result)
@@ -353,7 +347,7 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
 
 
 
-def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict, cl_name, outfilepath = None):
+def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict_filepath, cl_name, outfilepath = None):
     """
     Given a dictionary of the form : {(dataset, tf ): k} where dataset and tf are strings, will apply the
     k coefficient to each score of each peak of the corresponding combi
@@ -364,6 +358,14 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict,
     normalized_rf = open(outfilepath,'w')
     # Header
     normalized_rf.write('track name ='+cl_name+'_corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by correlation group" useScore=1'+'\n')
+
+
+    # Reload normalization dict from tsv
+    scaling_factor_dict = dict()
+    df_norm_dict = pd.read_csv(scaling_factor_dict_filepath, sep='\t', header=0, index_col=None)
+    for _, row in df_norm_dict.iterrows():
+        scaling_factor_dict[(row["dataset"], row["tf"])] = row["final_k"]
+
 
 
     rf = open(result_file_path,'r')
@@ -396,7 +398,8 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict,
 
 
 
-def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = None):
+def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = None,
+    was_corr_group_normalized_before_header = True, center_around = 750):
 
     scores_tf=dict()
     scores_datasets=dict()
@@ -432,10 +435,9 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
     rf.close()
 
 
+    ## Process the collected scores
 
-    # Process the collected scores
-
-    # FOR THE TFS
+    # For the TFs
     scores_df_tf = pd.DataFrame(columns = ["tf","count","mean","std","min","25pc","50pc","75pc","max"])
     for k,v in scores_tf.items():
         description = list(pd.Series(v).describe())
@@ -444,7 +446,7 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
     scores_df_tf.to_csv(result_file_path+'_scores_tf.tsv',sep='\t')
 
 
-    # FOR THE DATASETS
+    # For the datasets
     scores_df_datasets = pd.DataFrame(columns = ["dataset","count","mean","std","min","25pc","50pc","75pc","max"])
     for k,v in scores_datasets.items():
         description = list(pd.Series(v).describe())
@@ -458,10 +460,12 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
     if outfilepath is None : outfilepath = result_file_path + "_normalized_by_tf.bed" # Default file path
     normalized_rf = open(outfilepath,'w')
     # Header
-    normalized_rf.write('track name ='+cl_name+'_tf-normalized description="'+cl_name+' peaks with anomaly score - normalized by TF" useScore=1'+'\n')
-
-
-    ## Re-open original result file RE-OPEN ORIGINAL RESULT FILE
+    if not was_corr_group_normalized_before_header:
+        normalized_rf.write('track name ='+cl_name+'_tf-normalized description="'+cl_name+' peaks with anomaly score - normalized by TF" useScore=1'+'\n')
+    else:
+        normalized_rf.write('track name ='+cl_name+'_tf-and-corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by corr group and then by TF" useScore=1'+'\n')
+        
+    ## Re-open original result file 
     rf = open(result_file_path,'r')
 
     for line in rf:
@@ -469,19 +473,17 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
             line = line.split('\t') ; line[3] = line[3].split('.')
             tf = line[3][1] ; score = float(line[4])
 
-            # Apply a "normalization" (does not mean the scores are normally distributed)
+            # Apply a "normalization" (does NOT mean the scores are normally distributed !)
             new_score = (score - scores_df_tf.at[tf, 'mean']) / scores_df_tf.at[tf, 'std']
 
-            # Center at 500.
+            # Center at 750, after the corr group normalization, so we use more of the palette for "worse than typical"
             # I take 0.5 * new_score to reduce the dispersion a bit.
-            new_score = 500 * (1 + 0.5 * new_score)
+            new_score = center_around * (1 + 0.5 * new_score)
 
 
             if np.isnan(new_score) : new_score = 0 # Hotfix
 
-            # FINALLY clip at 1000 to match BED format
-            # NOTE only clip now, after the final normalization !!
-            # TODO say that exactly in paper !!
+            # Finally clip at 1000 to match BED format
             new_score = int(np.around(np.clip(new_score,0,1000)))
 
             # Rejoin line and write it
@@ -489,6 +491,7 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
             line[3] = '.'.join(line[3])
             line = '\t'.join(line)
             normalized_rf.write(line)
+            
     normalized_rf.close()
     rf.close()
 

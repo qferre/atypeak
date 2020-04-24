@@ -1,15 +1,19 @@
 # ---------------------------- Data processing ------------------------------- #
 # Results are done by cell line and will go in the appropriate directory.
 cell_line: "hela"
+# Change this parameter to process a different cell line.
 
-
+# Path to the CRM file. Should have the same value than in the Makefile.
+CRM_FILE: "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
 
 # ---------------------------- Execution ------------------------------------- #
+
+
 
 #### Model
 
 # If true, you will use only artificial data.
-# Used to demonstrate the model's capability to learn correlation groups.
+# Used to demonstrate that the model can learn correlation groups.
 use_artificial_data: False
 
 # If you have already trained a model, set this to True (models are saved automatically when trained)
@@ -29,23 +33,27 @@ process_full_real_data: True
 perform_real_data_diagnosis: True
 
 
-# ---------------------------- Autoencoder model ----------------------------- #
+#### Others
 
-# Core parameter : used all across the program, including in training !
+# Used all across the program, including in training !
 random_seed: 1234
 
-# Below are the key parameters for info budget
+disable_tensorflow_warnings: True
+
+# ---------------------------- Autoencoder model ----------------------------- #
+
+# ------ NOTE Below are the key parameters for info budget
 
 ## Architecture
 nn_kernel_nb: 32
 nn_deep_dim: 256
 ## Training
-nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001
+nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001 (!)
 
 
 
-# ------ You likely won't need to modify those below
-pad_to: 3200 # Must be equal to the "pad_to" parameter in the Makefile !
+# ------ NOTE You likely won't need to modify the parameters below
+pad_to: 3200 # WARNING Must be equal to the "pad_to" parameter in the Makefile !
 crumb: 0.1
 squish_factor: 10
 
@@ -59,13 +67,12 @@ nn_number_of_epochs : 64 # NOTE Old was 24, but I have found better to use more 
 nn_fit_verbosity: 1
 
 # Early stopping parameters
-nn_early_stop_min_delta: 0.00025
+nn_early_stop_min_delta: 0.00025  # Loss delta below this are not considered improvements
 nn_early_stop_patience: 5
 nn_early_stop_loss_absolute: 0 # Will stop training once this threshold of loss is reached
-# TODO : USE IT IN THE CODE FOR NOW IT DOES NOTHING
 
 
-## Other architecture parameters Architecture
+## Other architecture parameters
 nn_kernel_width_in_basepairs: 20 # Should be kept small, use squishing instead
 nn_reg_coef_filter: 0.0025
 nn_pooling_factor: 2
@@ -76,6 +83,10 @@ nn_pooling_factor: 2
 # if `null`, default weight of 1 is used.
 tf_weights: null
 datasets_weights: null
+
+# How many workers to use when multithreading file production. At least 1.
+# For very large dimensions/models, this may use a lot of RAM.
+nb_workers_produce_file: 7
 
 
 # ---------------------------- Diagnostic ------------------------------------ #
@@ -91,25 +102,19 @@ artificial_ones_only: True
 artificial_watermark_prob: 0.75
 
 
-
-
-
 # Several diagnostic steps are done only on a randomized subset of CRMs ; the subset is generated one.
 # This parameter betermines how many batches are drawn to geenrate the subset
 nb_batches_generator_for_diag_list_of_many_crms: 200
 # This is criticial, because it can take a very long time for high-dimensional data
 
-
-
-
-# Path to the CRM file. Should have the same value than in the Makefile.
-CRM_FILE: "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
-
-
-
 # Get some examples of CRMs' representations and rebuilding by the models. Number of batches to be given as example.
 example_nb_batches: 1
 
+
+
+# The mean score by TF will be normalized (X-mean/std) to be around this value (use one between 0 and 1000)
+# So after corr group normalization, we have a larger part of the score palette dedicated to "worse-than-typical" and not "better-than-typical"
+tf_normalization_center_around: 750
 
 
 ## Distribution of scores depending on TF presence.
@@ -135,7 +140,6 @@ tf_pairs:
   - ["sfmbt1", "brd4"]
   - ["brd4", "phf8"]
 
-
 # FOR K562:
 # tf_pairs:
 #   - ["ctcf","rad21"]
@@ -143,7 +147,6 @@ tf_pairs:
 #   - ["irf1","atf1"]
 #   - ["ctcf","jun"]
 #   - ["gata1","gata2"]
-
 
 
 ## Correlation group estimation

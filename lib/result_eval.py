@@ -4,11 +4,7 @@ Functions to compute scores, produce result, and evaluate the model.
 These functions are used both by the model (notably anomaly score calculation) and the diagnostic functions.
 """
 
-import os
-import sys
-import time
-import functools
-import itertools
+import os, sys, time, functools, itertools
 
 import pybedtools
 import numpy as np
@@ -18,18 +14,17 @@ import scipy.stats
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
 from plotnine import ggplot, aes, geom_histogram, scale_fill_grey, geom_violin, geom_boxplot, position_dodge, theme
 
 import lib.artificial_data as ad
-#import lib.model_atypeak as cp
-from lib import utils
+import lib.utils as utils
+
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 
 
 """
-
-MUST NOT IMPORT KERAS HERE FOR MULTIPROCESSING REASONS !!!!!!!!!!!
-
+Careful not to import Keras or Tensorflow here, otherwise the subprocess in file production will not work.
 """
 
 
@@ -79,75 +74,27 @@ def anomaly(before, prediction):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def produce_result_for_matrix(m,
     model, get_matrix_method, parameters, datasets_clean, cl_tfs):
     """
     Wrapper to produce a result for one matrix. Used in the main loop.
     """
-    # TODO Maybe add the possibility to supply a custom generator ?
-
-
-
-
-
-    START = time.time()
-
 
     # Collect original matrix and lines
     current_matrix, origin_data_file, crm_start = get_matrix_method(m, return_data_lines = True)
 
-    MATRIX_COLLECTED = time.time() 
-
     # Pad the matrix (much like we do in model_atypeak.generator_unsparse)
     # TODO The method must also return crm_length then for coordinate correction !
     crm_length = current_matrix.shape[0]
-    current_matrix_padded = np.pad(current_matrix, pad_width = ((parameters["pad_to"] - current_matrix.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0)
+    current_matrix_padded = np.pad(current_matrix, pad_width = ((parameters["pad_to"] - crm_length,0),(0,0),(0,0)), mode='constant', constant_values=0)
 
     squished_matrix = utils.squish(current_matrix_padded[:,:,:,np.newaxis])
 
-    MATRIX_PADDED = time.time()
-
-    # Compute result and anomaly
-    
+    ## Compute result and anomaly 
     prediction = model.predict(squished_matrix[np.newaxis,:,:,:,:])
-    
-
-    RESULT_COMPUTED_MODEL = time.time()
-
     result_matrix = utils.stretch(prediction[0,:,:,:,:])
-
     # This uses directly the anomaly function defined in this file
     anomaly_matrix = anomaly(current_matrix_padded, result_matrix[:,:,:,0])
-
-    ANOMALY =  time.time()
 
     # Now write to the result BED the current peaks with their newfound anomaly score
     result = utils.produce_result_bed(origin_data_file, anomaly_matrix,
@@ -155,25 +102,10 @@ def produce_result_for_matrix(m,
                                         crm_start, crm_length,
                                         debug_print = False)
     
-    RESULT_BED_COMPUTED = time.time() 
-
-
-    #print("\nMATRIX_COLLECTED",MATRIX_COLLECTED-START)
-    #print("MATRIX_PADDED",MATRIX_PADDED-MATRIX_COLLECTED)
-    #print("RESULT_COMPUTED_MODEL",RESULT_COMPUTED_MODEL-MATRIX_PADDED)
-    #print("ANOMALY",ANOMALY-RESULT_COMPUTED_MODEL)
-    #print("RESULT_BED_COMPUTED",RESULT_BED_COMPUTED-ANOMALY)
-
-
-    # WARNING : This is 1 - anomaly, so the score is actually high for good peaks !!
+    # WARNING : This is 1 - anomaly, so the score is actually high for good peaks !! TODO Emphasize it more
     return result
 
 
-
-import sys, time
-import numpy as np
-import multiprocessing
-from concurrent.futures import ProcessPoolExecutor
 
 
 class MonitoredProcessPoolExecutor(ProcessPoolExecutor):
@@ -213,20 +145,13 @@ def result_file_worker(minibatch, save_model_path,
     with redirect_stdout(f):
         with redirect_stderr(f):
 
-            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # No TF logs unless errors
             # Create keras session here for the worker
-            from keras.models import load_model
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # No TF logs unless errors
             import keras.backend as K
             import tensorflow as tf
-            #K.set_session(tf.Session())
-            #K.set_session(tf.compat.v1.Session())
 
-            #model = load_model(model_path)
-            # Must solve the reloading problems first ! Oa=kay done ????
             model = model_prepare_function(parameters, len(datasets_clean), len(cl_tfs))
             model.load_weights(save_model_path+".h5") # Do not forget to add the ".h5" !! 
-
-    
 
     my_produce_result_function_for_matrix = functools.partial(produce_result_for_matrix, model=model,
         get_matrix_method=get_matrix_method,
@@ -257,31 +182,14 @@ def produce_result_file(all_matrices, output_path, #model,
     if add_track_header : rf.write('track name ='+parameters['cell_line']+' description="'+parameters['cell_line']+' peaks with anomaly score" useScore=1'+'\n')
 
 
-    """
-    TODO MAKE model OPTIONAL IF MULTITHREADED AND MAKE save_model_path MANDATORY IF MULTITHREADED
-    """
-
-    # Get the model preparation call ?
-    
-
-
-
-
     ## Main loop iterating over all matrices
     result = list()
 
     print('Beginning processing...')
 
 
-    
-    
-    # NOTE I already tried multiprocessing the matrix collection and it was not faster
-    # To use multiprocessing for the rest, namely the Keras model, recall that we would need
-    # to reload and recreate the model in each child process, we cannot pass a pickled model
-    # NOTE WAIT YOU IDIOT THAT IS NOT IT. CHECK THE BENCHMARK ABOVE. THERE MIGHT BE 
-    # ROOM FOR IMPROVEMENT, perhaps by distributing the paddings and anomaly computings !?
-    # No wait again, it seems the model itself is actually the bottleneck ????
     """
+    # TODO what is actually the big performance hog
     THIS IS IMPORTANT AND CAN AFFECT THE PAPER because I wrote such things in the paper !! MUST DETERMINE EXACTLY WHICH PART IS THE BOTTLENECK !!!!
 
     The time taking by generating list_of_many_CRMs suggests that the generator was the problem though !
@@ -294,14 +202,19 @@ def produce_result_file(all_matrices, output_path, #model,
         This should be said in the paper !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
+    This is likely similar for training, should say that as well
+
+
     AND NEW TESTING SHOWS THAT MATRIX COLLECTION CAN BE MULTIPROCESSED ALITTLE. SO I RETRY.
 
     NOTE : IF THE PROCESSING TIMES ARE SHORTENED BY THIS, SAY SO IN PAPER AND CHANGE THE WARNING PRINTED IN THE CODE !!
 
+    YES THEY ARE. MULTIPROCESSING IS A GOOD IDEA.
+    TODO ADD A SENTENEC IN THE PAPER ABOUT IT ? Is that really necessary ? Yeah in the time consumption part
+
     """
 
-
-    
+   
 
     
     if nb_threads < 2:
@@ -316,10 +229,8 @@ def produce_result_file(all_matrices, output_path, #model,
 
         import lib.model_atypeak as cp
 
-        #K.set_session(tf.Session())
         model = model_prepare_function(parameters, len(datasets_clean), len(cl_tfs))
         model.load_weights(save_model_path+".h5") # Do not forget to add the ".h5" !! 
-
 
         my_produce_result_function_for_matrix = functools.partial(produce_result_for_matrix,
             model=model, get_matrix_method=get_matrix_method, parameters=parameters, datasets_clean=datasets_clean, cl_tfs=cl_tfs)
@@ -329,7 +240,6 @@ def produce_result_file(all_matrices, output_path, #model,
         cnt = 1
         for m in all_matrices:
 
-            #result += produce_result_for_matrix(m)
             result += my_produce_result_function_for_matrix(m)
 
             # Progress display
@@ -349,17 +259,11 @@ def produce_result_file(all_matrices, output_path, #model,
         print("Multi threaded")
 
         mana = multiprocessing.Manager()
-
         result_queue = mana.Queue()
-
-
-        #NB_PROCESSES = 7
         pool = MonitoredProcessPoolExecutor(nb_threads)
-
 
         # Split into as many batches as there are child processes 
         minibatches = np.array_split(np.array(all_matrices), nb_threads)
-
 
         args = {
             "save_model_path":save_model_path,
@@ -370,18 +274,11 @@ def produce_result_file(all_matrices, output_path, #model,
             "model_prepare_function":model_prepare_function,
             "result_queue":result_queue }
 
-        """
-        for minibatch in minibatches:
-            result_file_worker(minibatch = minibatches[0], **args)
-        """
-        
-        import subprocess
-
+        # Submit to the pool of processes
         for i in range(nb_threads):
             pool.submit(result_file_worker, minibatch = minibatches[i], **args )
 
        
-
         # Control print while there are still active workers
         while pool.get_pool_usage() > 0:
             time.sleep(0.05) # Prevent a flurry of messages
@@ -389,7 +286,7 @@ def produce_result_file(all_matrices, output_path, #model,
             sys.stdout.write("\r" +"Processed CRMs currently : "+str(cnt)+" / "+str(len(all_matrices)))
             sys.stdout.flush()
 
-        # Now empty the queue
+        # Empty the queue whenever possible
         while True:
             if not result_queue.empty():
                 partial_result = result_queue.get()
@@ -399,24 +296,6 @@ def produce_result_file(all_matrices, output_path, #model,
                 rf.close()
                 break
         del result_queue
-    """
-    MUST COMPARE SINGLE THREADED AND MULTI THREADED OUTPUTS AFTER BEDTOOLS SORTING !
-    """
-
-
-
-
-
-
-
-
-
-    
- 
-
-
-
-
 
 
 
@@ -453,9 +332,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
     average_crm = np.mean(np.array(list_of_many_crms), axis=0)
     average_crm_2d = np.mean(average_crm, axis = 0)
 
-    average_crm_2d_relative = average_crm_2d/np.max(average_crm_2d)
-
-
 
     # Open output file
     logcombifile = open(outfilepath,'w')
@@ -467,15 +343,12 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
     ###### FULL CRM
     full_crm_2d = (average_crm_2d>0).astype(int) # Full CRM where there is a peak everywhere there can be
-    full_crm_3d = np.stack([full_crm_2d]*320, axis=0).astype('float64')
+    full_crm_3d = np.stack([full_crm_2d]*int(crm_length/squish_factor), axis=0).astype('float64')
     #full_crm_3d = np.stack([[0*full_crm_2d]*210 + [full_crm_2d]*10 + [0*full_crm_2d]*100], axis=0).astype('float64')
-    # TODO UNHARDCODE THE 320 ABOVE !!
 
-    if use_crumbing: full_crm_3d = utils.look_here_stupid(full_crm_3d)
-    #if use_crumbing: full_crm_3d = utils.look_here_stupid(full_crm_3d[0,...])
+    if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d)
+    #if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d[0,...])
 
-    predictionf = model.predict(full_crm_3d[np.newaxis,...,np.newaxis])[0,:,:,:,0]
-    prediction_2df = np.max(predictionf, axis=0) # 2D - mean along region axis
     before_2df = np.mean(full_crm_3d, axis=0)
 
 
@@ -484,7 +357,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
 
 
-    BEFORE_VALUE = 1 # Careful about affine effect. Write somewhere.
+    BEFORE_VALUE = 1 # Careful about affine effect. TODO Write somewhere.
 
 
 
@@ -503,7 +376,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # Use a value of 10 or 100 to force MSE to show groups ??
         # No use 1 instead to prevent affine pbs
         x[:,curr_dataset_id, curr_tf_id] = BEFORE_VALUE
-        if use_crumbing: x = utils.look_here_stupid(x) # Add crumbing
+        if use_crumbing: x = utils.add_crumbing(x) # Add crumbing
         before_2d_p = np.mean(x, axis=0)
             
         xp = utils.squish(x, factor = squish_factor)
@@ -544,16 +417,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
     for combi in all_combis:
 
-
-        #combi = "GSE51633", "brd4"
-        #combi = "GSE22478", "phf8"
-        #combi = "GSE40632", "aff4"
-
-
-
-
-
-
         # Combi information
         curr_dataset = combi[0] # get id in list of the dataset
         curr_tf = combi[1] # get id in list of the tf
@@ -572,19 +435,15 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # Prepare a mask that contains more or less all peaks that are not in the current correlation group
         value_in_real_full = before_2df[curr_dataset_id,curr_tf_id]
         normalized_pred = prediction_2d/prediction_2d[curr_dataset_id,curr_tf_id]
-        # REMEMBER TO WRITE ALSO IN PAPER : the second term represents the value IT WOULD HAVE IN A FULL CRM
+        # TODO REMEMBER TO WRITE ALSO IN PAPER : the second term represents the value IT WOULD HAVE IN A FULL CRM
         others_mask = normalized_pred * value_in_real_full
         before_others = np.clip(before_2df - others_mask, 0, 2) # Floor at 0 and cap at 2 to prevent biases in others_mask and
         
         
-        #plt.figure();sns.heatmap(before_2df.transpose(), annot = True,fmt = ".2f")
-       
-        #plt.figure();sns.heatmap(others_mask.transpose(), annot = True,fmt = ".2f", cmap = "Greys")
+
         
 
         # ------------------ COMPUTING WEIGHTS
-
-
 
 
 
@@ -691,7 +550,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
 
         full_crm_3d_others = np.stack([before_others]*320, axis=0).astype('float64') # TODO UNHARDCODE THE 320 ABOVE !!
-        #if use_crumbing: full_crm_3d = utils.look_here_stupid(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
+        #if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
         predictionf_others = model.predict(full_crm_3d_others[np.newaxis,...,np.newaxis])[0,:,:,:,0]
         prediction_2df_others = np.mean(predictionf_others, axis=0) # 2D - mean along region axis
         
@@ -839,7 +698,7 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
     x = np.zeros((crm_length, len(all_datasets), len(all_tfs)))
     x[:,curr_dataset_id, curr_tf_id] = before_value
 
-    if use_crumbing: x = utils.look_here_stupid(x) # Add crumbing
+    if use_crumbing: x = utils.add_crumbing(x) # Add crumbing
 
     # See what the model rebuilds
     xp = utils.squish(x, factor = squish_factor)
@@ -910,7 +769,6 @@ def calculate_q_score(model, list_of_many_befores,
         # Calculate if the means are different for A alone and A with B
 
         # NOTE This is directional, we see if the score of A changes, not B (B will be done later by calling this function with the group reversed)
-
 
         # Select A alone values and A both
         scores_alone = group.loc[(group['status'] == 'alone') & (group['dim'] == 'A')]['score']
@@ -1013,15 +871,6 @@ def calculate_q_score(model, list_of_many_befores,
     all_qscores_df = pd.DataFrame(all_qscores, columns = ['dimA','dimB','corr','qscore', 'mean_A_alone', 'mean_A_both', 'mean_diff_pvalue'])
 
 
-
-
-
-    #print("DEBUG THIS LOOP COMPLETE; THIS IS THE LONG LOOP I SHOULD TRY TO MULTIPROCESS IT TO SEE")
-
-
-
-
-
     # Sum all original 'before' matrices along the X axis to get the mean_frequencies
     mean_freq = np.mean(list_of_many_befores, axis = (0,1))
     # Useful in q-score weight calculation
@@ -1033,15 +882,6 @@ def calculate_q_score(model, list_of_many_befores,
     q_weights = np.zeros((tnb,tnb))
 
     for _, row in all_qscores_df.iterrows():
-
-
-
-
-
-
-
-
-
 
         dim_tuple_A = row['dimA'] ; dim_tuple_B = row['dimB']
 
@@ -1062,10 +902,8 @@ def calculate_q_score(model, list_of_many_befores,
 
         res[dim1_raw, dim2_raw] = val
 
-
         current_corr = corr.iloc[dim1_raw, dim2_raw]
         current_corr_is_pos = np.sign(current_corr) > 0
-        #posvar[dim1_raw, dim2_raw] = both_higher_than_alone
         posvar[dim1_raw, dim2_raw] = int(both_higher_than_alone == current_corr_is_pos)
 
 
@@ -1079,7 +917,6 @@ def calculate_q_score(model, list_of_many_befores,
 
         # We would like the diagonal of weights to stay full zeros. We don't care about A vs A.
         np.fill_diagonal(q_weights, 0)
-
 
     plt.figure(); posvar_x_res_plot = sns.heatmap(posvar * res, xticklabels=q_labels, yticklabels=q_labels).get_figure()
 
@@ -1104,12 +941,7 @@ def calculate_q_score(model, list_of_many_befores,
     corr_plot.tight_layout()
     posvar_x_res_plot.tight_layout()
 
-
     return (q, qscore_plot, corr_plot, posvar_x_res_plot)
-
-
-
-
 
 
 
@@ -1140,8 +972,6 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
     # Prepare a dataframe which will be appended to everytime
     # Columns are respectively : anomaly score, type of peak (noise, stack...), number of brothers (peaks sharing a TF or a dataset)
     df = pd.DataFrame(columns = ["anomaly_score","rebuilt_value","type","brothers","tf_group","within_stack","in_reliable_datasets","nb_peaks_in_stack_for_this_crm"])
-    # HERE IS HOW TO APPEND : df.loc[len(df)] = [1,0.9,"noise",4]
-
 
     def get_brothers_nb(peaks, dataset, tf):
         # From the list of peaks, return the number of peaks with tha same dataset or TF. "peaks" must be an order 1 list (not a list of lists)
@@ -1150,32 +980,17 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
             return len(selected)
         except : return 0
 
-
     def was_this_dataset_tf_combi_used_in_stack(dataset, tf, peaks_stack):
         result = False
         for p in peaks_stack:
             if (p[0] == dataset) and (p[1] == tf) : result = True
         return result
 
-
-
     def partial_scores_for_this_CRM(separated_peaks, anomaly_matrix, before, rebuilt, reliable_datasets = None, tf_groups = None):
 
         partial_df = pd.DataFrame(columns = ["anomaly_score","rebuilt_value","type","brothers","tf_group","within_stack","in_reliable_datasets","nb_peaks_in_stack_for_this_crm"])
 
-
-
-
-
-
-
         # TODO split more, especially for the noise categories (see below) to make more explicit plots
-
-
-
-
-
-
 
         # Unpack the seperated peaks
         peaks_stack, peaks_noise, peaks_watermark = separated_peaks
@@ -1227,12 +1042,6 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
             # Remember the borders
             stack_left_border = min(stack_left_border, begin)
             stack_right_border = max(stack_right_border, end)
-
-
-
-
-
-
 
 
 
@@ -1304,7 +1113,6 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
                     if not is_within_stack: partial_df.loc[len(partial_df)] = [score,value,"noise_unreliable",brothers_nb, "different", False, False, len(peaks_stack)]
 
 
-
         ## Watermark
         for watermark_peak in peaks_watermark:
             dataset, tf, center, length, intensity = watermark_peak
@@ -1316,9 +1124,6 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
 
 
         return partial_df
-
-
-
 
 
 
@@ -1351,31 +1156,9 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
         df = pd.concat([df,partial_df])
 
 
-
     # Stick all these scores in a dataframe !
     return df, separated_peaks
     # TODO : REMOVE THE RETURN OF separated_peaks IT IS ONLY HERE FOR DEBUG PURPOSES
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1405,24 +1188,6 @@ def get_some_crms(train_generator, nb_of_batches_to_generate = 20, try_remove_cr
         list_of_many_crms = [np.clip(np.around(X-0.45), 0,1)[:,:,:,0] for X in many_crms]
 
     return list_of_many_crms
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1470,18 +1235,6 @@ def crm_diag_plots(list_of_many_crms, datasets, cl_tfs):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ----------------------------- After denoising ------------------------------ #
 
 
@@ -1499,10 +1252,9 @@ def group_peaks_by_crm(peaks_file_path, crm_file_path, group_by_CRM = False):
     # Group by CRM
     df['full_crm_coordinate'] = df["CRM_chr"].map(str)+'.'+df["CRM_start"].map(str)+'.'+df["CRM_end"].map(str)
 
-
-
     if group_by_CRM : return df.groupby(['full_crm_coordinate'])
     else : return df
+
 
 
 def plot_score_per_crm_density(peaks_file_path, crm_file_path):
@@ -1513,7 +1265,6 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
     plots = []
 
-
     # Get the peaks and group them by CRM
     df = group_peaks_by_crm(peaks_file_path, crm_file_path)
     df_gp = df[['anomaly_score','full_crm_coordinate']].groupby(['full_crm_coordinate'])
@@ -1522,7 +1273,6 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
     # Distribution of scores
     p = ggplot(df, aes(x='anomaly_score')) + geom_histogram(bins = 100)
     plots += [p]
-
 
     ## Average (and max) score per number of peaks in CRM
     res = pd.DataFrame(columns=['nb_peaks', 'average_score', 'max_score'])
@@ -1534,7 +1284,6 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
         new_row = pd.DataFrame({'nb_peaks': [npe], 'average_score': [asn], 'max_score': [msn]})
         res = pd.concat([res, new_row], ignore_index = True)
-
 
     # Group by number of peaks
     peaks_nb = np.array(res['nb_peaks'])+1E-10
@@ -1557,17 +1306,6 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 def get_scores_whether_copresent(tf_A, tf_B, atypeak_result_file, crm_file_path):
     """
     Used for this : if in literature we know A and B are found together truly, get the scores for A and B when they are together and alone.
@@ -1578,9 +1316,6 @@ def get_scores_whether_copresent(tf_A, tf_B, atypeak_result_file, crm_file_path)
 
 
     # TODO get combinations of N TFs
-    # import itertools
-    #
-    #
     # iterable = [1,2,3,4,5,6]
     # all_combis = list()
     # for l in range(1,len(iterable)+1):

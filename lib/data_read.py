@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 import scipy.sparse as sp
 
-
 # -------------------------- Preparation per cell line ----------------------- #
 
 def get_data_indexes(cell_line, root_path):
@@ -64,7 +63,6 @@ def get_data_indexes(cell_line, root_path):
             crm_coord_dict[query] = ls[3]
 
 
-    # TODO remove datapermatrix since I apparently do not use it !!
     # ------------------------ Nb datasets per matrix ------------------------ #
     # How many datasets contribute to each 2D matrix (CRM/TF couple), in this cell line ?
     cl_nb_datasets_per_matrix = dict()
@@ -138,18 +136,14 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, 
         # Get the line number for the dataset being processed
         line_of_matrix = names_ordered[current_dataset]
 
-
-
-
-        # TODO Get score or bigwig profile if applicable, or at least get peak summit, which is present in ReMap data
+        # Get score and peak summit if applicable
+        # TODO Use it
         if use_scores:
             score_peak = line[7]
             peak_summit = line[8]
-            # TODO Do something with peak summit
         # Currently all peaks are read as 1
         else:
             score_peak = 1
-
 
         # Get endpos and startpos
         startpos_peak = int(line[5])
@@ -163,16 +157,6 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, 
         # Now write to the matrix
         wvec = np.repeat(score_peak,endpos_peak-startpos_peak) # The vector to be written
         X[line_of_matrix,startpos_peak-crm_min:endpos_peak-crm_min] = wvec
-
-
-        # Same for peak_summit and max_score
-        # peak_max_begin = peak_summit - 100
-        # peak_max_end = peak_summit + 100
-        # if peak_max_begin < crm_min : startpos_peak = crm_min
-        # if peak_max_end > crm_max : endpos_peak = crm_max
-        # wvecmax = np.repeat(score_peak_max,peak_max_end-peak_max_begin)
-        # X[line_of_matrix,peak_max_begin-crm_min:peak_max_end-crm_min] = wvecmax
-
 
     # Return the result
     X_c = X.tobsr() # Convert to Block Sparse Row
@@ -213,7 +197,6 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
     for tf in all_tfs:
 
         # --------------------- Build 2D matrix for this TF ------------------ #
-
         # If the couple (crm_id,tf) does not exist (because this CRM
         # has no peaks for this TF) return an empty matrix !
         if (crm_id, tf) not in cl_crm_tf_dict :
@@ -241,8 +224,7 @@ def extract_matrix(crm_id, cell_line, all_tfs, # Parameters
                     for i, line in enumerate(fp):
                         if i == new_line_number: subfile.append(line)
 
-            # Now get the list of all datasets for the considered cell line and
-            # extract the matrix
+            # Now get the list of all datasets for the considered cell line and extract the matrix
             matrix = process_data_file_into_2d_matrix(subfile, cl_datasets, crm_min, crm_max)
             matrices.append(matrix)
 

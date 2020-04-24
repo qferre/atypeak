@@ -3,22 +3,19 @@ import numpy as np
 
 import random
 
-from lib import utils
-#from lib import model_atypeak as cr
+import lib.utils as utils
 
 """
 Functions to generate artificial data for model evaluation.
 
 In broad strokes, the data generated will place a stack of peaks (plus some noise as well as a constant watermark at 0,0)
-
 This stack will be placed in "reliable_datasets" and by picking either one of two TF correlation groups.
 
 The goal is to show that the model will usually rebuilt the correlation group as a whole, but nothing from the other group.
 """
 
 
-
-def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.arange(16),
+def generator_fake(batch_size = 10, region_length = 160, #reliable_datasets=np.arange(16),
                     nb_datasets = 16, nb_tfs = 10, squish_factor = 10, ones_only = False,
                     watermark_prob = 0.75, tfgroup_split = 2/3, overlapping_groups = False, crumb = None):
     """
@@ -32,39 +29,26 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
     To be passed to Keras' fit_generator()
     """
     while True:
+
         batch_features = list()
-        batch_status = list()
+        
         for i in range(batch_size):
             X = make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
                 ones_only=ones_only, watermark_prob=watermark_prob,
                 tfgroup_split=tfgroup_split, overlapping_groups=overlapping_groups)
 
             if crumb != None :
-                # To counter sparsity, add crumbs (see function documentation)
-                X = utils.look_here_stupid(X, crumb)
+                # To counter sparsity, add crumbs if requested
+                X = utils.add_crumbing(X, crumb)
 
             Xi = X[..., np.newaxis] # Add meaningless 'channel' dimension
             batch_features.append(Xi)
-            batch_status.append('data')
-
-
-        # # Sometimes, give a matrix of only noise and tell it to rebuild it as "full zero"
-        # if rand < p :
-        #     noisy_shape = dense_matrix.shape
-        #     noisy = make_a_fake_matrix(region_length,nb_datasets,nb_tfs,signal = False)
-        #     batch_features.append('noisy')
-        #     batch_status.append('noise')
-
 
         result = np.array(batch_features)
 
         target = list()
-        for i in range(len(result)) :
-            if batch_status[i] == 'data' : target.append(result[i]) # The target is the data
-            #if batch_status[i] == 'noisy' : target.append(np.zeros(result[i].shape)) # This was just noise. The target should be an empty matrix
-
+        for i in range(len(result)) : target.append(result[i]) # The target is the data itself
         target = np.array(target)
-
 
         # Squishing along the X axis to reduce computing cost
         result = [utils.squish(m, squish_factor) for m in result]
@@ -72,20 +56,20 @@ def generator_fake(batch_size = 10,region_length = 160, #reliable_datasets=np.ar
         result = np.array(result)
         target = np.array(target)
 
-
         yield (result,target)
 
 
 
 
-
-def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False, ones_only = False):
+def list_of_peaks_to_matrix(peaks, region_length, nb_datasets, nb_tfs, ones_only = False):
     """
     Utility function designed for make_a_fake_matrix(). It will convert a list of peak objects, which
     are tuples of (dataset, tf, center, length, intensity), into a 3D tensor.
     """
+    # TODO This is more or less the same code than for real data, but real data
+    # does not use this function. Recode so that it does and share the same code.
 
-    mat = np.zeros((region_length,nb_datasets,nb_tfs)) # TODO make this a scipy.sparse matrix ? Is that really necessary ?
+    mat = np.zeros((region_length,nb_datasets,nb_tfs))
 
     # Now write the peaks to the matrix
     for peak in peaks:
@@ -97,27 +81,16 @@ def list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb=False,
 
         ## Write to matrix
         # Intensity is clipped at 0-1000 and divided by 1000
-        intensity_clipped = np.clip(intensity,0,1000) / 1000
+        # This is done because input peaks are assumed to be in BED format, whose intensity caps at 1000
+        intensity_clipped = np.clip(intensity, 0, 1000) / 1000
 
         # Write peak
         mat[begin:end,dataset,tf] = mat[begin:end,dataset,tf] + intensity_clipped
 
-        # Add crumbs
-        if crumb :
-            mat[begin:end,:,tf] = mat[begin:end,:,tf] + 0.1*intensity_clipped
-            mat[begin:end,dataset,:] = mat[begin:end,dataset,:] + 0.1*intensity_clipped
-
         # Override : if ones_only, we overwrite the current value with 1
         if ones_only : mat[begin:end,dataset,tf] = 1
 
-
-    # # Debug : transpose the TF and dataset axis.
-    # if debug_transpose : mat = np.transpose(mat,(0,2,1))
-
     return mat
-
-
-
 
 
 def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
@@ -131,8 +104,11 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
     signal, noise : which kinds of peaks to genrate
     ones_only : with score = 1000, or random
 
+    tfgroup_split : odds of using one tf group or the other
+    overlapping_groups: whether the groups should be {A, B} or {A, AB}
+
     return_separately : if True, will stop and return a separate list of lists of peaks (resp. stack, noise, watermark)
-    to be processed in evaluation - this will NOT return a tensor.
+    To be processed in evaluation - this will NOT return a tensor.
     """
 
     # TODO Do not hardcode the parameters of Poisson and other laws
@@ -151,8 +127,7 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
     k = ss.poisson(1).rvs() + 1
     datasets = np.random.choice(reliable_datasets,k)
-    # TODO : not all datasets correlate ! assign different probas ?
-    # TODO : weighted choice here to test intra group bias
+    # TODO Try using different probas as not all datasets correlate. Also weighted choice for imbalances.
 
     # Pick common center for the stack
     common_center = int(ss.uniform(0,region_length).rvs())
@@ -198,7 +173,7 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
                 center_for_this_tf = int(common_center + ss.uniform(-200,200).rvs())
                 length = int(ss.lognorm(scale=250,s=0.25).rvs())
                 intensity =  ss.norm(500,120).rvs() + ss.norm(10,10).rvs() # intensity = random + noise
-                # NOTE intensity is dicarded by default for now due to ones_only
+                # NOTE Intensity is dicarded by default for now due to ones_only
 
                 # From analysis, peaks FOR THE SAME TF across different datasets should be very similar.
                 for dataset in datasets :
@@ -235,7 +210,6 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
             peaks_noise.append((r_dataset, r_tf, r_center, r_length, r_intensity))
 
 
-
     # CONTROL BAR : have one of the datasets/TF pair have a peak on all the length
     # of the region. It should get in most cases its own group or a slight correlation.
     # To prevent learning traps, don't make it always appear.
@@ -250,18 +224,12 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
     # In any other cases, treat them in bulk.
     peaks = peaks_stack + peaks_noise + peaks_watermark
 
-
-
-    # NOTE : For now artificial data has no crumbs.
-    # Must allow it to be changed here. Less useful in artificial because the
-    # dimensions and sparsity are usually smaller in proof-of-concepts.
-
     # Convert list of peaks to tensor
-    result = list_of_peaks_to_matrix(peaks,region_length,nb_datasets,nb_tfs, crumb = False, ones_only = ones_only)
+    result = list_of_peaks_to_matrix(peaks, region_length, nb_datasets, nb_tfs, ones_only = ones_only)
 
     # Clip result !
     result = np.clip(result,0,1)
 
     return result
-    # TODO Make it possible to return (matrix) or (matrix, matrix_without_noise)
-    # NOTE Those matrices are quite denser than typical real ones, may need to revise down number of parameters
+    # NOTE Those matrices are quite denser (less sparse) than typical real ones, may need to revise down number of parameters.
+    # The fact that they are denser and of smaller dimensions is also why I use no crumbs for now.

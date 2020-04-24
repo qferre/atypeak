@@ -1,4 +1,4 @@
-# atyPeak
+# atyPeak : PUT ARTICLE TITLE HERE
 
 This repository presents a tool for correlating peaks (BED file regions) from multiple datasets using convolutional autoencoders for k-dimensional tensors. We present a stacked multiview approach with a comparatively shallow network.
 
@@ -44,6 +44,9 @@ BE SURE TO CHANGE THE CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE !!!
 
 - Run `make prepare` to transform the input_raw into an input readable by the model (mostly involves making an index of peak positions)
+
+
+**Notes about the environment** : the code supports TensorFlow 2, but uses 1.14 by default (for performance reasons and historical and reproducibility reasons ?? Confirm that before I write it, but it seems so) write that in the article too ! jsut the first part about how I dev on 1.14 but support 2
 
 ### Running
 
@@ -168,7 +171,10 @@ Q-score
 - corr_datasets_tf gives the correlation of each dimension with each other (for example, is the presence of peaks from dataset2 correlated with peaks from TF 5).
 - posvar: does the presence of a peak from the line dimension increase score of the column dimension
 - qscore : individual contributions of each pair to the qscore (with numerical values as a tsv)
-
+    """Those plots give respectively the Q-score contribution of each pair 
+     (lower is better), the true correlation matrix for comparison, and
+     the third plot says whether the presence of both results in a change in 
+     score and should "look like" the correlation plot."""
 
 STILL MISSING SOME
 

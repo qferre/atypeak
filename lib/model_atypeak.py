@@ -1,5 +1,4 @@
-import sys
-import time
+import sys, time
 
 import numpy as np
 import pandas as pd
@@ -14,41 +13,11 @@ from keras import backend as K
 
 from skimage.filters import gaussian as gaussian_filter
 
-from lib import utils
-
-
+import lib.utils as utils
 
 
 # ------------------------------ Reading data -------------------------------- #
 
-
-
-
-
-
-
-
-# import threading
-# 
-# class threadsafe_iter:
-#     """
-#     # Takes an iterator/generator and makes it thread-safe by locking `next`.
-#     """
-#     def __init__(self, it):
-#         self.it = it
-#         self.lock = threading.Lock()
-#
-#     def __iter__(self): return self
-#
-#     def __next__(self):
-#         with self.lock: return self.it.__next__()
-#
-# def threadsafe_generator(f):
-#     # A decorator that takes a generator function and makes it thread-safe.
-#     def g(*a, **kw): return threadsafe_iter(f(*a, **kw))
-#     return g
-
-# @threadsafe_generator
 def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         pad_to, crumb = 0.1, squish_factor = 10, debug_print = False):
     """
@@ -62,7 +31,7 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         - pad_to : matrices will always be padded to this. Must be a multiple of
             the smallest number of filters in the model !
         - crumb : if not None, will add its value as a crumb to positions where
-            a peak has been observed but not in this dataset (see look_here_stupid documentation)
+            a peak has been observed but not in this dataset (see add_crumbing documentation)
 
         - squish_factor : diminish matrix scale along X axis by this much. Saves computing power.
     """
@@ -72,9 +41,6 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         indexes = np.random.choice(len(matrices_keys),size=batch_size)
 
         batch_features = list()
-        batch_status = list()
-
-        # NOTE I already tried multiprocessing this, it slowed it, likely due to disk reading overhead.
 
         for i in indexes:
             # Get the query arguments and generate the matrix
@@ -89,27 +55,14 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
 
             if crumb != None :
                 # To counter sparsity, add a crumbs (see function documentation)
-                X = utils.look_here_stupid(X, crumb)
+                X = utils.add_crumbing(X, crumb)
 
             batch_features.append(X)
-            batch_status.append('data')
-
-            
-            # # Override : from time to time, return a 'noise -> empty' pair
-            # # to train the network to discard noise
-            # if rand < p :
-            #     noisy_shape = X.shape
-            #     noisy = noise_generating_call(pad_to,noisy_shape[1],noisy_shape[2])
-            #     batch_features.append('noisy')
-            #     batch_status.append('noise')
-            
+           
 
         # Pad with zeroes
         def pad_batch(arr):
-            #arr = np.array(arr) # Force to numpy array to be safe
-            #padded = [np.pad(x,pad_width = ((pad_to - x.shape[0],0),(0,0),(0,0)), mode='constant', constant_values=0) for x in arr]
             padded = [utils.zeropad(x, pad_width = ((3200 - x.shape[0],0),(0,0),(0,0))) for x in arr]
-
             return np.array(padded)
 
         result = pad_batch(batch_features)
@@ -120,45 +73,30 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         # Add the meaningless 'channel' dimension
         result = result[...,np.newaxis]
 
-
-        ### Now prepare the targets
-        target = list()
-        for i in range(len(result)) :
-            if batch_status[i] == 'data' : target.append(result[i]) # The target is the data
-            if batch_status[i] == 'noisy' : target.append(np.zeros(result[i].shape)) # This was just noise. The target should be an empty matrix
-        target = np.array(target)
-
         # Remove completely empty matrices
-        # TODO maybe also remove matrices with one or two peaks only
+        # TODO Maybe also remove matrices with one or two peaks only
         summed = np.apply_over_axes(np.sum, result, [1,2,3,4])
         idx = np.flatnonzero(summed)
         result = result[idx,:,:,:,:]
-        target = target[idx,:,:,:,:]
 
         # Squish the matrices along their X axis (region_length)
         # Due to the nature of our data (peaks/regions), we can use this to
         # reduce computational cost with negligible information loss
         result = [utils.squish(m, squish_factor) for m in result] ; result = np.array(result)
 
-        # If all elements of batch_status are 'data', it means the target was NOT modified
-        # and as such there is no need to squish it : we can simply copy the `result` batch array
-        # TODO use it above as well
-        if all(status == 'data' for status in batch_status):
-            target = np.copy(result)
-        else:
-            target = [utils.squish(m, squish_factor) for m in target] ; target = np.array(target)
+        # As all targets (result is the input of the model, target is the 
+        # desired output) are simply a copy of the result, we can simply 
+        # copy if after squishing
+        target = np.copy(result)
        
         # # Override : we can call a function here that modifies results and targets before they are
         # # supplied.
-        # # Mainly used in diagnostic and debug
         # result, target = call_override(result, target)
-        # # Add to doc : this function must have a signature or result, target = f(result, target)
+        # # This function must have a signature or result, target = f(result, target)
         # # where result and targets are 5D numpy arrays (lists of 4D numpy arrays of shape region_length,nb_datasets,nb_tfs,1) ;
-        # # please note that the result and target are in respective order
+        # # Remember that the result and target are in respective order (ie. target[0] is the target for result[0])
 
         yield (result,target)
-
-
 
 
 
@@ -181,8 +119,10 @@ def create_weighted_mse(datasets_weights, tf_weights):
     has a weight of 3, the corresponding loss will be multiplied by 3.
     """
 
-    datasets_weights_arr = np.array(datasets_weights).reshape(1,len(datasets_weights),1)
-    tf_weights_arr = np.array(tf_weights).reshape(1,1,len(tf_weights))
+    datasets_weights_arr = np.array(datasets_weights)
+    datasets_weights_arr = datasets_weights_arr.reshape((1,len(datasets_weights),1))
+    tf_weights_arr = np.array(tf_weights)
+    tf_weights_arr = tf_weights_arr.reshape((1,1,len(tf_weights)))
 
     # Turn to tensors and expand with relevant axis.
     D = K.variable(datasets_weights_arr, dtype=K.floatx())
@@ -194,11 +134,9 @@ def create_weighted_mse(datasets_weights, tf_weights):
         result = raw_mse * D * T
         return result
 
-    # TODO Must separate pos and neg for additional weighting (loss due to added
-    # phantoms and loss due to removed peaks)
-
+    # TODO Separate pos and neg for differential weighting.
     # TODO To use a 2d matrix of weights instead with one specific weight per 
-    # source (TF+dataset pair), simply do something like this :
+    # source (TF+dataset pair), simply do something like this:
     # raw_mse = np.ones((10000,3,4)) # The data
     # w = np.array([[1,1,1,2],[2,2,2,1],[1,1,2,2]]) # the weights. IMPORTANT : shape is (nb_datasets, nb_tfs)
     # result = raw_mse * w # Perform the multiplication in that order !
@@ -218,7 +156,7 @@ class EarlyStoppingByLossVal(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         current = logs.get(self.monitor)
-        if current is None: warnings.warn("Early stopping requires %s available!" % self.monitor, RuntimeWarning)
+        if current is None: print("Early stopping requires %s available!" % self.monitor)
         if current < self.value: self.wait += 1
         if self.wait >= self.patience:
             if self.verbose > 0: print("Epoch %05d: early stopping after patience for THR" % epoch)
@@ -229,18 +167,7 @@ class EarlyStoppingByLossVal(keras.callbacks.Callback):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-# The model itself
+# ----------------------------- The model itself ----------------------------- #
 def create_atypeak_model(nb_datasets, region_size, nb_tfs,
             kernel_nb,kernel_width_in_basepairs, reg_coef_filter,
             pooling_factor, deep_dim,
@@ -259,9 +186,9 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
 
     # 'CRE-Telomer' padding
     # The data is not an image. The padding introduced later can mask informations
-    # about peaks that are on the flanks (we observed they systematically were 
-    # poorly rebuilt). This flank seemed to be a problem for roughly 2* kernel_size
-    # so we add a padding of zeroes, to be removed at the end. 
+    # about peaks on the flanks (we observed they systematically were poorly rebuilt)
+    # This flank seemed to be a problem for roughly 2* kernel_size so we add 
+    # a padding of zeroes, to be removed at the end. 
     telomer_len = 2* kernel_width_in_basepairs
 
     telomer_pad = (
@@ -315,14 +242,13 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
 
 
 
-
     ## ----- ENCODER
 
     ## Convolutional layers
     # NOTE Convolutions are made on each axis separtely as the represent info
     # of a different nature, and because 3D convos has trouble learning all at once
     # Only 1 CNN layer each because higher order combis are not what we want ;
-    # but the Dense layers (plural !!) can learn combis of combis just fine with *deep* learning
+    # but the Dense layers (plural) can learn combis of combis
 
     # Apply 'Telomer' padding
     xpadded = ZeroPadding3D(telomer_pad, name = 'pad')(input)
@@ -347,43 +273,38 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
 
 
     ## Dense layers provide the "deep" muscle for the model
-    # Due to how Keras works, only the last dimension provides weights. The previous
-    # input is 2D per element, so the weights are calculated only on the last dimension.
+    # Due to how Keras works, only the last dimension provides weights.
     # This means that, in effect, this layer behaves like a TimeDistributed Dense :
     # There is no communication along the X dimension, only along the "filters" dimension from the previous layer !
-    # This is a hange from earlier Keras behavior, which would flatten the input prior to a Dense layer.
-    # This can be confirmed by counting the parameters in the exported model.summary()
-    # This is UNLIKE what is stated in the doc. Source : https://stackoverflow.com/questions/52089601/keras-dense-layers-input-is-not-flattened
+    # NOTE This is a change from earlier Keras behavior, which would Flatten. Confirmed by counting the parameters in model.summary()
+    # This is UNLIKE what is stated in the doc.
     x = Dense(deep_dim, activation = 'relu')(x)
     x = Dropout(0.1)(x)
     x = Dense(deep_dim, activation = 'relu')(x)
     x = Dropout(0.1)(x)
     x = Dense(deep_dim, activation = 'relu')(x)
     x = Dropout(0.1)(x)
-
 
 
     """
-    # TODO Try adding some LSTM layers, and use many of them in each layer (hundreds)
+    # TODO Try integrating some LSTM layers, and use many of them in each layer. Although having too many LSTMs may make the information budget too high. Play with budget and adjust consequenty.
     # Add this before the encoded layer, so this layer gets info that the LSTMs have learned.
-
     # This would obviously require reshaping the output of the latest CNN because LSTMs only get 2d input (not counting the batch_size dimension)
     # So you would have 1 value at each position for the last filter, with the timesetps being the position along the genome
 
     # Use LSTM layer with return sequences, to get (timesteps, lstm_number) as output dim
     # Then a time distributed Dense(deep_dim) to get (timesteps, deep_dim) as output
-    # if use_lstm :
-        # x = LSTM(latent_dim, return_sequences = True)(x)
-        # x = LSTM(latent_dim, return_sequences = True)(x) # Stack 2 LSTMs for giggles.
-        # NOTE as usual, having too many LSTMs may make the information budget too high. Play with budget and adjust consequenty.
-        # x = TimeDistributed(Dense(deep_dim))(x) # THIS SHOULD BE THE ENCODED LAYER ACTUALLY, otherwise I'm just making a new layer of combis and losing the timestep
-    # else :
+    if use_lstm :
+        x = LSTM(latent_dim, return_sequences = True)(x)
+        x = LSTM(latent_dim, return_sequences = True)(x) # Stack 2 LSTMs for giggles.
+        
+        # This one will be the encoded layer actually, otherwise I'm just making a new layer of combis and losing the timestep
+        x = TimeDistributed(Dense(deep_dim))(x) 
     """
 
     # Layer of the encoded representation (no regularisation)
     x = Dense(deep_dim, activation = 'relu',
         name = 'encoded')(x)
-
 
 
 
@@ -413,7 +334,7 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
         )(x)
 
 
-    # Reverse 'telomer' padding :
+    # Reverse the 'telomer' padding :
     final_layer = Lambda(lambda m: m[:,telomer_len:-telomer_len,:,:,:], name = 'unpad')(decoded)
 
 
@@ -423,8 +344,6 @@ def create_atypeak_model(nb_datasets, region_size, nb_tfs,
     autoencoder.compile(optimizer=optimizer, loss=loss)
 
     return autoencoder
-
-
 
 
 
@@ -454,7 +373,7 @@ def compute_max_activating_example_across_layer(model,
     Return a list : for each class, gives an artificial example for which the
     selected layer best says "this example belong to class X"
 
-    Derived from : http://ankivil.com/visualizing-deep-neural-networks-classes-and-features/
+    Derived from Keras' blog.
 
     Use this to visualize what each neuron in a hidden layer is looking for, most notably used for the encoded dimension.
     """
@@ -507,13 +426,15 @@ def compute_max_activating_example_across_layer(model,
                 input_data[0,:,:,:,0] = gaussian_filter(input_data[0,:,:,:,0], sigma=np.array([blurStdX, blurStdY, blurStdZ]))
 
             # Control print giving the loss value at each step (in our case, the activation)
-            sys.stdout.write("\r" + 'Dimension '+str(class_index)+' -- Activation = ' + str(np.mean(loss_value))) ; sys.stdout.flush()
+            if debug_print:
+                sys.stdout.write("\r" + 'Dimension '+str(class_index)+' -- Activation = ' + str(np.mean(loss_value))) ; sys.stdout.flush()
 
         # decode the resulting input image and add it to the list
         max_activation_class.append(input_data[0])
         losses.append(loss_value)
         end_time = time.time()
-        #print('\nOutput dimension %d processed in %ds' % (class_index, end_time - start_time))
+        if debug_print:
+            print('\nOutput dimension %d processed in %ds' % (class_index, end_time - start_time))
 
 
     # Return the processed list of optimal class examples
@@ -522,9 +443,7 @@ def compute_max_activating_example_across_layer(model,
 
 
 
-
-
-# To understand, provide a function that, given a before matrix (or simply a CRM) will output its encoded representation. So you can understand the combinations at play.
+# Given a before matrix (or simply a CRM) this function will output its encoded representation to understand the combinations at play.
 def get_encoded_representation(before_matrix, model, ENCODED_LAYER_NUMBER = 15, disable_learning = True):
 
     # Disable the learning phase behavior (e.g. Dropout)

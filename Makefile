@@ -2,47 +2,50 @@ MAKEFILE = Makefile
 WDIR = ${PWD}
 SHELL = /bin/bash
 
-.PHONY: install prepare run
-
-
 # ------------------------------ Parameters ---------------------------------- #
 
 # The CRM matrices should have this size (for makewindows, padding will be
 # done in Python later)
 CRM_WINDOW_SIZE = 3200
 
-# File names (relative to `input_raw` directory) (after decompression ?)
+# File names (relative to `input_raw` directory) after decompressio
 CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed
 
 # ---------------------------------------------------------------------------- #
 
-# Important !
-.ONESHELL:
+.ONESHELL: # Run all in one shell
 
+
+## Preparation
 
 install:
+	conda init
 	# Create the conda environment we need
 	conda env create -f env.yaml
-	# conda init
-
 
 
 # Turn the raw input_data into something readable by the model
 prepare: decompress copybin intersect convert dictionaries split
 
 
+## Running
+
 # Run the model with the parameters specified in parameters.yaml
 run: train process
 
+# Model training
 train:
 	conda activate atypeak
 	python3 train.py
 
+# Reload trained model and process the full data
 process:
 	conda activate atypeak
 	python3 process.py
 
+
+## Cleaning
 
 clean :
 	# Remove all data and results
@@ -51,13 +54,12 @@ clean :
 	rm -rf ./data/input_raw/*.bed
 	# We however keep the compressed input_raw
 
-# clean_env:
-	# conda remove --name atypeak --all
+clean_env:
+	conda remove --name atypeak --all
 
 
 
-##############################		RULES		######################################
-
+##############################		RULES		################################
 
 decompress:
 	cd data
@@ -69,21 +71,9 @@ decompress:
 	mkdir output/bed # For the bed files with scores
 	mkdir output/diagnostic # For analysis of result
 
-
 	## Decompress data, keep originals
 	cd input_raw
 	unxz *.xz -k
-
-	# Fix residual bug : by mistake some fields are separated with spaces instead
-	# of tabs in the peaks_file.
-	#mv remap2018_allpeaks_macs2score_Minuslog10.bed untabulated.bed
-	#perl -p -e 's/ /\t/g' untabulated.bed > remap2018_allpeaks_macs2score_Minuslog10.bed
-	#rm untabulated.bed
-	# Already done in current version on GitHub
-
-	# Run the python script which selects the data based on the selection by Jeanne
-	#python3 ./data/input/filter_file.py
-
 
 
 copybin:
@@ -95,6 +85,7 @@ copybin:
 	cd data/input
 	bedtools makewindows -b ${CRM_FILE} -w ${CRM_WINDOW_SIZE} > crm_split.bed
 	rm -rf ${CRM_FILE}
+
 
 intersect:
 	cd data/input
@@ -117,8 +108,6 @@ intersect:
 	rm -rf crm.bed
 
 
-
-
 convert:
 	### Reorganize the intersect.bed into a text file with, in order :
 	# Cell_line, CRM id, TF, dataset, peak coordinates, score, summit
@@ -130,7 +119,6 @@ convert:
 
 	# Clean up
 	rm -f remap2018_crm_all_intersected_macs2_hg38_v1_2.bed
-
 
 
 dictionaries:
@@ -156,11 +144,10 @@ dictionaries:
 	cut sorted_intersect.txt -f1,2,3,4 | uniq |\
 	rev | uniq -f1 -c | rev | tr ' ' '\t' | cut -f1,2,3,5 > nb_datasets_per_matrix.txt
 	# WARNING the line counts are reversed due to the commands used here (they will be reversed again in Python processing)
-	# TODO Not currenty used. Would be useful for weighted losses.
+	# TODO Would be used for weighted losses.
 
 	# Clean up
 	rm -f cell_line_crm_tf_tuples_untreated.txt
-
 
 
 split:
@@ -194,25 +181,3 @@ split:
 	### Clean up
 	rm -f cell_line_crm_tf_tuples.txt
 	rm -f nb_datasets_per_matrix.txt
-
-
-
-
-
-
-
-
-
-
-
-# # Temporary, for sacapus cluster tests
-# sacapus_run:
-# 	COMMAND="""mkdir -p qsub_output
-# 	conda activate atypeak
-# 	KERAS_BACKEND=theano
-# 	python3 main.py"""
-# 	printf "$${COMMAND}" > denoising_remap_main.sh
-
-# 	qsub -V -q tagc -d $$PWD -l nodes=1:ppn=16 -e ./qsub_output -o ./qsub_output denoising_remap_main.sh
-
-# 	rm denoising_remap_main.sh
