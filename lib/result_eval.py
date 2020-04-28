@@ -14,7 +14,7 @@ import scipy.stats
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from plotnine import ggplot, aes, geom_histogram, scale_fill_grey, geom_violin, geom_boxplot, position_dodge, theme
+from plotnine import ggplot, aes, geom_histogram, scale_fill_grey, geom_violin, geom_boxplot, position_dodge, theme, xlab, ylab
 
 import lib.artificial_data as ad
 import lib.utils as utils
@@ -146,7 +146,12 @@ def result_file_worker(minibatch, save_model_path,
         with redirect_stderr(f):
 
             # Create keras session here for the worker
-            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # No TF logs unless errors
+            os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2'  # No TF logs unless errors
+
+            # NOTE KMP_AFFINITY can lock all processes to the same core.
+            # We must disable it to use more than one CPU.
+            os.environ["KMP_AFFINITY"] = "none"
+
             import keras.backend as K
             import tensorflow as tf
 
@@ -157,19 +162,18 @@ def result_file_worker(minibatch, save_model_path,
         get_matrix_method=get_matrix_method,
         parameters=parameters, datasets_clean=datasets_clean, cl_tfs=cl_tfs)
 
-
+    
     for m in minibatch:
         my_result = my_produce_result_function_for_matrix(m)
         result_queue.put(my_result)
-
-
+    
 
 
 def produce_result_file(all_matrices, output_path, #model,
     get_matrix_method, parameters, model_prepare_function,
     datasets_clean, cl_tfs,
     add_track_header = True,
-    nb_threads =1,
+    nb_threads = 1,
     save_model_path = None):
     """
     Will take all CRM whose ID is in all_matrices, rebuild them with the
@@ -276,11 +280,13 @@ def produce_result_file(all_matrices, output_path, #model,
 
         # Submit to the pool of processes
         for i in range(nb_threads):
-            pool.submit(result_file_worker, minibatch = minibatches[i], **args )
+            pool.submit(result_file_worker, minibatch = minibatches[i], **args)
+            print("Submitted job.")
 
        
         # Control print while there are still active workers
         while pool.get_pool_usage() > 0:
+            #print(pool.get_pool_usage())
             time.sleep(0.05) # Prevent a flurry of messages
             cnt = result_queue.qsize()
             sys.stdout.write("\r" +"Processed CRMs currently : "+str(cnt)+" / "+str(len(all_matrices)))
@@ -342,7 +348,8 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
     # ------------------ PREPARING SOME PREDICTIONS
 
     ###### FULL CRM
-    full_crm_2d = (average_crm_2d>0).astype(int) # Full CRM where there is a peak everywhere there can be
+    # Full CRM where there is a peak everywhere there can be
+    full_crm_2d = (average_crm_2d>0).astype(int) 
     full_crm_3d = np.stack([full_crm_2d]*int(crm_length/squish_factor), axis=0).astype('float64')
     #full_crm_3d = np.stack([[0*full_crm_2d]*210 + [full_crm_2d]*10 + [0*full_crm_2d]*100], axis=0).astype('float64')
 
@@ -353,14 +360,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
 
 
-
-
-
-
     BEFORE_VALUE = 1 # Careful about affine effect. TODO Write somewhere.
-
-
-
 
 
 
@@ -452,7 +452,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
         # See the ratio between sum of prediction and sum of before
         # If there is an intra group bias in favor of the source, it will be higher (nonwithstanding group size, later on)
-        #intra_weight = np.sum(before_2d_p)/np.sum(prediction_2d)
         # This has been calculated above, use it
         intra_weight =  intra_weight_mask[curr_dataset_id, curr_tf_id]
 
@@ -464,12 +463,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # NOTE KEEP THIS
         # Correlation groups reach a rebuilt value of 1 on each peak (hmm after normalizing intra group BE CAREFUL NOTE THIS SOMEWHERE ELSE) when complete, but we
         # need to normalize this by "how complete are they typically"
-
-        # Since when a group is complete its members get a score of 1, 1/prediction_this is
-        # a good estimator of how complete the group is when a single peak is present 
-        #prediction_this = prediction_2d[curr_dataset_id, curr_tf_id]
-        #corrected_prediction_this = prediction_this *first_weight
-
 
         # Try to estimate the "request", ie. the group this source belongs to, by looking at
         # the added phantoms, which are the peaks that were expected
@@ -484,7 +477,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         occupancy = []
         negative_occupancy = []
 
-        mask =  clipped_requested_group/np.max(clipped_requested_group) #*16 # so we have full-term-equivalents, full term meaning "the most requested source"
+        mask = clipped_requested_group/np.max(clipped_requested_group) #*16 # so we have full-term-equivalents, full term meaning "the most requested source"
         # TODO I removed the dividing by max, try again with it if there are problems
 
 
@@ -533,86 +526,32 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # Overlapping groups can result in a higher score by combining several influences
         # Such groups are not always seen when looking at phantoms for individual source
 
-
-
-        # We observe that this effect is  rarer, and applying the coefficient raw is an overcorrection
-        # so we use sqrt of the coef or something, as it should be higher than 1 ? 
-        # TODO MAKE SURE NOT FULL COEF
-        # because CRMs are very rarely full, and doing it like this does not correct for intra or inter group bias (in the groups being overlapped, not just the request of the source being considered)
-
         # An estimate is such : 
-        # We retake before_other that contains more or less all peaks that are not in the current correlation group
-
-   
-        
-        
-        #plt.figure();sns.heatmap(before_others.transpose(), annot = True,fmt = ".2f", cmap = "Reds")
-
+        # We retake before_other that contains more or less all peaks that are
+        # not in the current correlation group
 
         full_crm_3d_others = np.stack([before_others]*320, axis=0).astype('float64') # TODO UNHARDCODE THE 320 ABOVE !!
         #if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
         predictionf_others = model.predict(full_crm_3d_others[np.newaxis,...,np.newaxis])[0,:,:,:,0]
         prediction_2df_others = np.mean(predictionf_others, axis=0) # 2D - mean along region axis
         
-        
-        #before_2df_others = np.mean(full_crm_3d_others, axis=0)
-        #plt.figure();sns.heatmap(before_2df_others.transpose(), annot = True,fmt = ".2f", cmap = "Purples")
-
-        #plt.figure();sns.heatmap(prediction_2df_others.transpose(), annot = True,fmt = ".2f", cmap = "Oranges")
-
-        # prediction_2df_others can be see as "how much rebuilding could all other complete groups provide
-
-
-
+        # Now, when there are all peaks not in the corr group and only those, how much
+        # of a phantom is present for this source ?
         others_contibution = prediction_2df_others[curr_dataset_id,curr_tf_id]
 
-        #overlapping_weight = 1 - (others_contibution/value_in_real_full)
-        #overlapping_weight = np.sqrt(overlapping_weight)# NOTE Square added empirically becuase it's a rare case
-        ## Maybe instead of two lines above do this : 
-        # How much do others usually contribute to the group ? # So calculate how much in a average scenario, they are expected to provide
+        # How much do those others peaks usually contribute to the group ? 
+        # So calculate how much in a average scenario, they are expected to provide
         strangers_weight = mean_negative_occupancy / max_negative_occupancy_possible
         overlapping_weight = 1 - ((others_contibution/value_in_real_full) * strangers_weight)
 
 
-
         # TODO This is an ersatz, we need to use Monte Carlo similar to occupancy estimation in te inter-group bias phase : apply intra and inter group corrections, and then look at phantoms. Probably.
-
-
-
-
-
 
         # NOTE General assumption FOR ALL OF THIS MOVE ELSEWHER AND ADD TO PAPER : Assuming negative effects are negligible and that in biology more is always better
 
 
-
-
-
-
-
-
-
-
-
-
         # Finally, combine the weights
         k = intra_weight * inter_weight * overlapping_weight
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -625,14 +564,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         if average_crm_2d[curr_dataset_id, curr_tf_id]>0:
             coefs_norm[combi] = k # Record it
 
-        # To prevent overamplification of not-learned sources (seen as noise), cap k at 10
         
-
-        # TODO PRINT THIS IN A FILE SOMEWHERE !!!
-        # TODO MAKE THIS A TSV !!!
-        
-        
-         
 
 
         # Only write it in the tsv if it is a real source (normalization applied to crumbs does not count)
@@ -642,14 +574,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
             line=str(combi[0])+'\t'+str(combi[1])+'\t'+str(intra_weight)+'\t'+str(inter_weight)+'\t'+str(overlapping_weight)+'\t'+str(k)+'\n'
             # Maybe add prediction_this and occupancy ?
             logcombifile.write(line)
-
-
-
-
-            #print(str(combi),"- mean occupancy =", mean_occupancy)
-            #print(str(combi),"- max occupancy =", max_occupancy_possible)
-
-
 
 
     # So in the end we have a dictionary of combinations.
@@ -719,7 +643,6 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
 
 
 
-
 ################################################################################
 # -------------------------------- Q-score ----------------------------------- #
 ################################################################################
@@ -737,8 +660,6 @@ def calculate_q_score(model, list_of_many_befores,
     If two dimensions (datasets or TF) correlate should result in a higher score for them than when alone and vice-versa.
     The Q-score quantifies this. See details in code comments.
     """
-
-        
 
     # Required labels for seaborn heatmaps ; Q labels are : all datasets, then all tfs
     q_labels = all_datasets_names + all_tf_names
@@ -776,8 +697,6 @@ def calculate_q_score(model, list_of_many_befores,
 
         mean_A_alone = np.mean(scores_alone)
         mean_A_both = np.mean(scores_both)
-        #print('mean A alone ='+str(mean_A_alone))
-        #print('mean A both ='+str(mean_A_both))
 
         # Is there a significant difference ? Do a student t-test
         mean_diff = scipy.stats.ttest_ind(scores_alone, scores_both, equal_var=False)#.pvalue
@@ -849,8 +768,6 @@ def calculate_q_score(model, list_of_many_befores,
 
     for dim_tuple_A, dim_tuple_B in all_duos:
 
-        #print("dim tuple A = "+str(dim_tuple_A))
-        #print("dim tuple B = "+str(dim_tuple_B))
 
         # compute group
         group = get_scores_when_copresent_from_matrices(dim_tuple_A, dim_tuple_B,
@@ -942,7 +859,6 @@ def calculate_q_score(model, list_of_many_befores,
     posvar_x_res_plot.tight_layout()
 
     return (q, qscore_plot, corr_plot, posvar_x_res_plot)
-
 
 
 
@@ -1233,8 +1149,6 @@ def crm_diag_plots(list_of_many_crms, datasets, cl_tfs):
 
 
 
-
-
 # ----------------------------- After denoising ------------------------------ #
 
 
@@ -1287,20 +1201,35 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
     # Group by number of peaks
     peaks_nb = np.array(res['nb_peaks'])+1E-10
-    peaks_nb = peaks_nb.astype(float)# change dtype
+    peaks_nb = peaks_nb.astype(int)
 
     peak_nb_fact = np.log2(peaks_nb)
+
+
+
+    # TODO TESTING
+    #peak_nb_fact = np.clip(peak_nb_fact, 0, 2)
+    peak_nb_fact[(peak_nb_fact !=1) & (peak_nb_fact !=2) & (peak_nb_fact !=3)] = -1
+
+
     res['nb_peaks_fact'] = peak_nb_fact.astype(int).astype(str)
 
+
+
+    # TODO TESTING
+    #res = res.head()
+    #print(res.head())
+    #res.to_csv('./test_crm.tsv', sep = '\t')
+
     # Plots
-    p = ggplot(res, aes(x='nb_peaks_fact', y='average_score', fill='nb_peaks_fact')) + scale_fill_grey() + geom_violin() + geom_boxplot(width=0.1)
+    p = ggplot(res, aes(x='nb_peaks_fact', y='average_score')) + geom_violin() + xlab("Number of peaks (log2)") + geom_boxplot(width=0.1)
     plots += [p]
-    p = ggplot(res, aes(x='nb_peaks_fact', y='max_score', fill='nb_peaks_fact')) + scale_fill_grey() + geom_violin() + geom_boxplot(width=0.1)
+    p = ggplot(res, aes(x='nb_peaks_fact', y='max_score')) + xlab("Number of peaks (log2)") + geom_boxplot(width=0.1)
     plots += [p]
+    # TODO NOTE removed the geom_violin from the last plot due to an inexplicable bandwith bug
+
 
     return plots
-
-
 
 
 
@@ -1315,7 +1244,8 @@ def get_scores_whether_copresent(tf_A, tf_B, atypeak_result_file, crm_file_path)
     result = list()
 
 
-    # TODO get combinations of N TFs
+    # TODO get combinations of N TFs and redo the same kind of graphs, but for n-wise presences
+    # Try a Venn diagram ?
     # iterable = [1,2,3,4,5,6]
     # all_combis = list()
     # for l in range(1,len(iterable)+1):

@@ -181,7 +181,7 @@ def train_model(model, parameters):
 
         ## Check model was correctly saved and predictions are the same
         tmp_model = prepare.prepare_model_with_parameters(parameters, len(datasets_clean), len(cl_tfs))
-        tmp_model.load_weights(save_model_path)
+        tmp_model.load_weights(save_model_path+".h5") # Do not forget the ".h5"
 
         for _ in range(3): # Try this a few times
             before_batch = next(train_generator)[0]
@@ -212,6 +212,7 @@ model = train_model(model, parameters)
 # This is used MANY times in the code, for Q-score, many diagnostics, and
 # abundance, normalization, etc.
 # NOTE To prevent an issue with threading, recreate a new train_generator
+print("Generating many CRMs for diagnosis. This may be long...")
 train_generator = produce_data_generator(all_parameters_dict=parameters, matrices_id=all_matrices, get_matrix_func=get_matrix)
 
 start_genlist = time.time()
@@ -235,7 +236,7 @@ corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(mo
     crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
     outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.tsv")
 # Needed in true file production, hence it's not optional.
-
+print("Correlation group normalization factors estimated.")
 
 
 # Perform some diagnosis on the model. Only if the `perform_model_diagnosis` 
@@ -447,6 +448,36 @@ if parameters['perform_model_diagnosis']:
     utils.plot_3d_matrix(before)
     """
 
+
+
+
+    # --------------------- Correlation group estimation --------------------- #
+    # Try to estimate the correlation groups learned by the model for certain 
+    # select sources (ie. TF + dataset pairs) by looking at what kind of
+    # phantoms are added by the model
+
+    corrgroup_estim_output_path = plot_output_path + "estimated_corr_groups/"
+    if not os.path.exists(corrgroup_estim_output_path): os.makedirs(corrgroup_estim_output_path)
+
+    for combi in parameters['estimate_corr_group_for']:
+        try:
+            dataset, tf = combi
+            
+            output_path_estimation = corrgroup_estim_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
+            
+            fig, _ = er.estimate_corr_group_for_combi(dataset, tf,
+                all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
+                crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
+            fig.get_figure().savefig(output_path_estimation)
+                
+            plt.close('all') # Close all figures    
+        except:
+            print("Error estimating for : "+str(combi))
+            print("Ignoring.")
+
+
+
+
     # ----------------------- Proof on artificial data ----------------------- #
     # Plot score of artificial peaks depneding on type (noise, stack, ...)
 
@@ -473,8 +504,8 @@ if parameters['perform_model_diagnosis']:
         a2 = a + geom_boxplot(position=position_dodge(1), width=0.5)
         b = ggplot(df, aes(x="brothers", y="rebuilt_value", group="brothers")) + scale_fill_grey() + geom_boxplot(width = 0.4)
 
-        a2.save(filename = plot_output_path+'artifical_data_systematisation_value_per_type.png', height=10, width=14, units = 'in', dpi=400)
-        b.save(filename = plot_output_path+'artifical_data_systematisation_value_per_brothers.png', height=10, width=14, units = 'in', dpi=400)
+        a2.save(filename = plot_output_path+'artifical_data_systematisation_value_per_type.png', height=10, width=14, units = 'in', dpi=400, verbose = False)
+        b.save(filename = plot_output_path+'artifical_data_systematisation_value_per_brothers.png', height=10, width=14, units = 'in', dpi=400, verbose = False)
 
         plt.close('all') # Close all figures
 

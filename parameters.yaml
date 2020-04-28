@@ -8,25 +8,21 @@ CRM_FILE: "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
 
 # ---------------------------- Execution ------------------------------------- #
 
-
-
-#### Model
-
-# If true, you will use only artificial data.
-# Used to demonstrate that the model can learn correlation groups.
-use_artificial_data: False
-
 # If you have already trained a model, set this to True (models are saved automatically when trained)
 load_saved_model: False
-
-# If reloading a known model, you may want to set this to False and skip the diagnosis steps (Q-score, etc.)
-perform_model_diagnosis: True
-
-#### Data processing
 
 # If False, will not process the full real data, which can be long
 # You should calibrate with Q-score before processing the full data (see readme) !
 process_full_real_data: True
+
+
+#### Diagnosis
+
+# If True, you will use only artificial data. Used to demonstrate that the model can learn correlation groups.
+use_artificial_data: False
+
+# If reloading a known model, you may want to set this to False and skip the diagnosis steps (Q-score, etc.)
+perform_model_diagnosis: True
 
 # The below will perform diagnosis on real data : average score per crm, alone+both plots, that kind of stuff
 # You should likely leave it at True
@@ -34,15 +30,13 @@ perform_real_data_diagnosis: True
 
 
 #### Others
-
-# Used all across the program, including in training !
-random_seed: 1234
+random_seed: 1234 # Used all across the program, including in training
 
 disable_tensorflow_warnings: True
 
 # ---------------------------- Autoencoder model ----------------------------- #
 
-# ------ NOTE Below are the key parameters for info budget
+# ------ Those are the key parameters for the information budget
 
 ## Architecture
 nn_kernel_nb: 32
@@ -51,8 +45,15 @@ nn_deep_dim: 256
 nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001 (!)
 
 
+# ------  You likely won't need to modify the parameters below
 
-# ------ NOTE You likely won't need to modify the parameters below
+# Weighting
+# Should be a list containing as many elements as the relevant dimension. Gives their respective weights (sorted alphabetically)
+# eg. tf_weights = [1,1,2,2]
+# if `null`, default weight of 1 is used.
+tf_weights: null
+datasets_weights: null
+
 pad_to: 3200 # WARNING Must be equal to the "pad_to" parameter in the Makefile !
 crumb: 0.1
 squish_factor: 10
@@ -63,7 +64,7 @@ nn_optimizer: "adam"
 
 # Long to train. Keep these both small. Usually long training not needed and will stop before.
 nn_batches_per_epoch : 48
-nn_number_of_epochs : 64 # NOTE Old was 24, but I have found better to use more and let the EARLY STOPPING take care of it
+nn_number_of_epochs : 64 # Better to use more and use early stopping
 nn_fit_verbosity: 1
 
 # Early stopping parameters
@@ -71,50 +72,28 @@ nn_early_stop_min_delta: 0.00025  # Loss delta below this are not considered imp
 nn_early_stop_patience: 5
 nn_early_stop_loss_absolute: 0 # Will stop training once this threshold of loss is reached
 
-
 ## Other architecture parameters
 nn_kernel_width_in_basepairs: 20 # Should be kept small, use squishing instead
 nn_reg_coef_filter: 0.0025
 nn_pooling_factor: 2
 
-# Weighting
-# Should be a list containing as many elements as the relevant dimension. Gives their respective weights (sorted alphabetically)
-# eg. tf_weights = [1,1,2,2]
-# if `null`, default weight of 1 is used.
-tf_weights: null
-datasets_weights: null
 
 # How many workers to use when multithreading file production. At least 1.
-# For very large dimensions/models, this may use a lot of RAM.
-nb_workers_produce_file: 7
+# WARNING For very large dimensions/models, this may use a lot of RAM.
+nb_workers_produce_file: 4 
 
 
 # ---------------------------- Diagnostic ------------------------------------ #
 
-
-###### Artificial data parameters
-artificial_tfgroup_split: 0.666
-artificial_overlapping_groups: False
-
-artificial_nb_datasets: 8
-artificial_nb_tfs: 8
-artificial_ones_only: True
-artificial_watermark_prob: 0.75
+# The mean score by TF will be normalized (X-mean/std) to be around this value (use one between 0 and 1000)
+# So after corr group normalization, we have a larger part of the score palette dedicated to "worse-than-typical" and not "better-than-typical"
+tf_normalization_center_around: 750
 
 
 # Several diagnostic steps are done only on a randomized subset of CRMs ; the subset is generated one.
 # This parameter betermines how many batches are drawn to geenrate the subset
 nb_batches_generator_for_diag_list_of_many_crms: 200
 # This is criticial, because it can take a very long time for high-dimensional data
-
-# Get some examples of CRMs' representations and rebuilding by the models. Number of batches to be given as example.
-example_nb_batches: 1
-
-
-
-# The mean score by TF will be normalized (X-mean/std) to be around this value (use one between 0 and 1000)
-# So after corr group normalization, we have a larger part of the score palette dedicated to "worse-than-typical" and not "better-than-typical"
-tf_normalization_center_around: 750
 
 
 ## Distribution of scores depending on TF presence.
@@ -159,3 +138,21 @@ estimate_corr_group_for:
     - ['GSE45441','sfmbt1']
     - ['GSE22478','phf8']
     - ['GSE51633','brd4']
+
+# FOR ARTIFICIAL
+# estimate_corr_group_for:
+#     - ['dat_1','tf_1']
+
+# ------  You likely won't need to modify the parameters below
+
+# Get some examples of CRMs' representations and rebuilding by the models. Number of batches to be given as example.
+example_nb_batches: 1
+
+### Artificial data parameters
+artificial_tfgroup_split: 0.666
+artificial_overlapping_groups: False  # If True, the groups will be {AB,A} instead of {A,B}
+
+artificial_nb_datasets: 8
+artificial_nb_tfs: 8
+artificial_ones_only: True
+artificial_watermark_prob: 0.75

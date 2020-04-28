@@ -327,7 +327,7 @@ def print_merge_doublons(bedfilepath, ignore_first_line_header = True, outputpat
         skiprows = 1
 
         with open(bedfilepath) as inf : header = inf.readline()
-        with open(outputpath, 'a') as of : of.write(header)
+        with open(outputpath, 'w') as of : of.write(header)
 
     else : skiprows = None
 

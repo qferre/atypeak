@@ -32,6 +32,8 @@ np.random.seed(SEED)
 
 # Tensorflow random seed should have no impact now since the model is already trained.
 
+os.environ['KMP_WARNINGS'] = 'off' # Also disable OMP warnings
+
 ## Reading corresponding keys. See the documentation of get_data_indexes() for more.
 crmtf_dict, datasets, crmid, datapermatrix, peaks_per_dataset, cl_tfs = dr.get_data_indexes(parameters['cell_line'], root_path)
 
@@ -118,22 +120,21 @@ else:
         
         print('Producing scored BED file :',output_bed_path)
         
-        # TODO number of threads is actually number of processes and optimal might not be 7 ! Try several !
+        # # TODO number of threads is actually number of processes and optimal might not be 7 ! Try several !
 
         start_prod = time.time()
-        er.produce_result_file(all_matrices[0:1000], output_bed_path+"_MULTITHREAD",
+        er.produce_result_file(all_matrices, output_bed_path,
             get_matrix, parameters, prepare.prepare_model_with_parameters,
             datasets_clean, cl_tfs,
             nb_threads = parameters["nb_workers_produce_file"], save_model_path = save_model_path)
         end_prod = time.time()
         total_time_prod = end_prod-start_prod
         print('Multithread done in',str(total_time_prod),'seconds.')
-
+    
 
         """
         TODO NOTE THIS IN PAPER MAYBE AND HERE AS NOTES
         WARNING : TOO LARGE MODELS MAY CONSUME TOO MUCH MEMORY WHEN MULTITHREADED ???
-
 
         APPARENTLY TENSORFLOW 2 IS MUCH SLOWER, SO GO BACK TO TENSORFLOW 1 AND USE MULTITHREADING
         FOR BEST SPEED. SO I DID WELL TO KEEP BOTH CODES, mention we can us both TF 1 or 2 in the readme
@@ -181,6 +182,12 @@ else:
 
         if parameters['perform_real_data_diagnosis']:
 
+            # TODO Put those in a directory of their own !!!
+            distribution_output_path = plot_output_path + "distribution_score/"
+            if not os.path.exists(distribution_output_path): os.makedirs(distribution_output_path)
+
+
+
             print('Performing diagnostic plots...')
 
             # Only if not artificial data.
@@ -194,14 +201,14 @@ else:
             sub_df = scores_by_tf_df.loc[:,['count','50pc']]
             sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
             for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-            plt.savefig(plot_output_path+'scores_median_by_tf_after_corrgroup_normalization_only.pdf')
+            plt.savefig(distribution_output_path+'scores_median_by_tf_after_corrgroup_normalization_only.pdf')
 
             # By dataset
             fig, ax = plt.subplots(figsize=(10, 8))
             sub_df = scores_by_dataset_df.loc[:,['count','50pc']]
             sub_df.plot('count', '50pc', kind='scatter', ax=ax, s=24, linewidth=0) ; ax.grid()
             for k, v in sub_df.iterrows(): ax.annotate(k, v,xytext=(10,-5), textcoords='offset points')
-            plt.savefig(plot_output_path+'scores_median_by_dataset_after_corrgroup_normalization_only.pdf')
+            plt.savefig(distribution_output_path+'scores_median_by_dataset_after_corrgroup_normalization_only.pdf')
 
 
             ## Quantify effect of normalization
@@ -213,7 +220,8 @@ else:
             df_cur = df_cur.reset_index()
             df_cur_melted = df_cur.melt(id_vars=['tf'], value_vars=['mean_raw_before_corrgroup_normalization','mean_after_corrgroup_normalization'])
             p = ggplot(df_cur_melted, aes(x = "tf", y= "value", fill = "variable")) + geom_bar(stat="identity", width=.7, position = "dodge") + theme(legend_position = "top")
-            p.save(plot_output_path+"scores_mean_by_tf_before_and_after_corrgroup_normalization.pdf", height=8, width=16, units = 'in', dpi=400)
+            p.save(distribution_output_path+"scores_mean_by_tf_before_and_after_corrgroup_normalization.pdf",
+                    height=8, width=16, units = 'in', dpi=400, verbose = False)
             # TODO Same for datasets
 
             plt.close('all') # Close all figures
@@ -221,27 +229,29 @@ else:
 
 
 
-
-
-            # ----------------------- Scores per CRM  ------------------------- #
+            # ----------------------- Scores per CRM  ------------------------ #
             # Computing score distribution per number of peaks in CRMs
 
             # Both on raw file and after final normalization
-
             score_distrib, avg_score_crm, max_score_crm = er.plot_score_per_crm_density(output_bed_path, parameters["CRM_FILE"])
-            score_distrib.save(plot_output_path+'score_distribution_raw.pdf')
-            avg_score_crm.save(plot_output_path+'average_score_per_crm_density_raw.pdf')
-            max_score_crm.save(plot_output_path+'max_score_per_crm_density_raw.pdf')
-
-            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_final, parameters["CRM_FILE"])
-            score_distrib_tfnorm.save(plot_output_path+'score_distribution_after_final_normalization.pdf')
-            avg_score_crm_tfnorm.save(plot_output_path+'average_score_per_crm_density_after_final_normalization.pdf')
-            max_score_crm_tfnorm.save(plot_output_path+'max_score_per_crm_density_after_final_normalization.pdf')
-
-
+            score_distrib.save(distribution_output_path+'score_distribution_raw.pdf', verbose = False)
+            avg_score_crm.save(distribution_output_path+'average_score_per_crm_density_raw.pdf', verbose = False)
+            max_score_crm.save(distribution_output_path+'max_score_per_crm_density_raw.pdf', verbose = False)
             plt.close('all') # Close all figures
 
-            # ----------------- Scores when known cofactors (or known non-cofactors) are present
+            score_distrib_tfnorm, avg_score_crm_tfnorm, max_score_crm_tfnorm = er.plot_score_per_crm_density(output_bed_path_final, parameters["CRM_FILE"])
+            score_distrib_tfnorm.save(distribution_output_path+'score_distribution_after_final_normalization.pdf', verbose = False)
+            avg_score_crm_tfnorm.save(distribution_output_path+'average_score_per_crm_density_after_final_normalization.pdf', verbose = False)    
+            max_score_crm_tfnorm.save(distribution_output_path+'max_score_per_crm_density_after_final_normalization.pdf', verbose = False)
+            plt.close('all') # Close all figures
+
+
+
+
+
+
+            # ------------------ Scores of correlation pairs ----------------- #
+            # Scores when known cofactors (or known non-cofactors) are present
 
             print("Retrieving scores for specified TF pairs and estimating correlation groups...")
 
@@ -261,7 +271,7 @@ else:
                     p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_final, parameters["CRM_FILE"])      
                     #p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_merged, CRM_FILE)  # DEBUG before corr group normalization
                     
-                    p.save(tf_alone_both_output_path+"tf_alone_both_"+tf1+"_"+tf2+".pdf")
+                    p.save(tf_alone_both_output_path+"tf_alone_both_"+tf1+"_"+tf2+".pdf", verbose = False)
 
                     plt.close('all') # Close all figures
                 except:
@@ -270,29 +280,6 @@ else:
             
 
 
-            # ----- Correlation group estimation
-            # Try to estimate the correlation groups learned by the model for 
-            # certain select sources (ie. TF+dataset paisr) by looking at what
-            # kind of phantoms are added by the model
-
-            corrgroup_estim_output_path = plot_output_path + "estimated_corr_groups/"
-            if not os.path.exists(corrgroup_estim_output_path): os.makedirs(corrgroup_estim_output_path)
-
-            for combi in parameters['estimate_corr_group_for']:
-                try:
-                    dataset, tf = combi
-                    
-                    output_path_estimation = corrgroup_estim_output_path + "estimated_corr_group_for_"+dataset+"_"+tf+".pdf"
-                    
-                    fig, _ = er.estimate_corr_group_for_combi(dataset, tf,
-                        all_datasets = datasets_clean, all_tfs = cl_tfs, model = model,
-                        crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"])
-                    fig.get_figure().savefig(output_path_estimation)
-                     
-                    plt.close('all') # Close all figures    
-                except:
-                    print("Error estimating for : "+str(combi))
-                    print("Ignoring.")
 
             
 print("Data succesfully processed !")

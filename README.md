@@ -1,36 +1,18 @@
 # atyPeak : PUT ARTICLE TITLE HERE
 
-This repository presents a tool for correlating peaks (BED file regions) from multiple datasets using convolutional autoencoders for k-dimensional tensors. We present a stacked multiview approach with a comparatively shallow network.
+This is a tool to find anomalous peaks (BED file regions) in a database containing peaks from different sources (TRs or experiments), based on whether or not the peaks respect the usual correlations between sources.
 
-The code is written in Keras ; the data used here are ChIP-Seq peaks from ReMap. 
+We present a stacked multiview, shallow convolutional autoencoder to automate this. CRMs are represented as 3D tensors of peak presence.
 
+The code is written in Keras. We use a simple network to compress the data, so as to learn correlation groups present in the data. 
 
+Please see *atyPeak, Ferré et al. [TBD]* for more information.
 
-
-
-
-MAYBE SPLIT THIS INTO SEVERAL READMEs IN A DOC ?
-
-
-
-
-## Description
-
-Quickly summarize the philosphy : few layers, stacked multiview, convolution for combis, autoencoder for compression to lose anomalies and keep good features
-
-
-Please see the paper for more details. 
-
-
-
-### Results
-
-ReMap data has been processed, available here : www.remap/the_tab_that_Benoit_promised_me
+Our result data can be regenerated here, and is also  available here : www.remap/the_tab_that_Benoit_promised_me
+TODO Put correct link
 
 
 ## Usage
-
-
 
 ### Installation
 
@@ -38,10 +20,10 @@ Works only on linux and macos due to pybedtools and makefile
 
 - Run `make install`, to create a conda environment. called 'atypeak'.
 
-- Place the input data in *./data/input_raw/* and follow the correct data format, outlined below
+- **If you want to change the data**, place the input data in *./data/input_raw/* and follow the correct data format, outlined below
 
-BE SURE TO CHANGE THE CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
-PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE !!!
+BE SURE TO CHANGE THE CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed in makefile and yaml, and also
+PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE
 
 - Run `make prepare` to transform the input_raw into an input readable by the model (mostly involves making an index of peak positions)
 
@@ -50,15 +32,15 @@ PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed PARAMETERS IN THE MAKEFILE 
 
 ### Running
 
-
-
 - Set the parameters in *parameters.yaml*. The meaning of them is detailed in YAML comments
 
-Then use `make run`. The network is comparatively shallow and can be run on a CPU.
+
 
 **Set load_saved_model and process_full_real_data to False**, so you will train a model, evaluate it with Q-score, and save it.
 
-- Once you run the script once, you will have a trained model names trained_{cell_line}_model.h5 ; this way you can now activate use_trained_model in the parameters in the yaml.
+- Then use `make run`. The network is comparatively shallow and can be run on a CPU.
+
+- Once this is done, you will have a trained model names trained_{cell_line}_model.h5 ; this way you can now activate use_trained_model in the parameters in the yaml.
 
 This will also produce q-score and other diagnostics plots and info in the output directory (presumably if you relaod a model, you have already diagnosed it and can set perform_model_diagnosis to False).
 
@@ -66,7 +48,7 @@ Look at the diagnostic plots : MOST NOTABLY look at some examples of rebuit CRMS
 
 
 
-Once satisfied, **set those two parameters (load_saved_model and process_full_real_data) to True  and then use `make run` again** so that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis. This is done because processing the real data is the most consuming part
+- Once satisfied, **set those two parameters (load_saved_model and process_full_real_data) to True  and then use `make run` again** so that you reload the model and process the full data. Also set perform_diagnosis so you don't re-perform the diagnosis. This is done because processing the real data is the most consuming part
 
 
 
@@ -180,12 +162,9 @@ STILL MISSING SOME
 
 ## Contributing
 
-
-
 Please feel free to post issues on GitHub !
 
 The paper as well as comments in main.py explain the rest
-
 
 ALSO EXPLAIN THAT USAGE INSTRUCTIONS IN DETAILS ARE IN THE PAPER
 
@@ -193,11 +172,9 @@ ALSO EXPLAIN THAT USAGE INSTRUCTIONS IN DETAILS ARE IN THE PAPER
 
 ## Credits
 
+Please cite [atyPeak paper].
 
-
-Please cite <atyPeak paper>
-
-The raw data included here is a subset of ReMap 2018 data, source is <remap link>
+The raw data included here is a subset of ReMap 2018 data, see [ReMap link].
 
 This code is available under the GNU GPL3 license.
 
@@ -207,5 +184,4 @@ This code is available under the GNU GPL3 license.
 
 Quentin Ferré -- quentin.ferre@gmail.com
 
-
- Acknowledgements : Jeanne Chèneby, Cécile Capponi, Benoît Ballester,  Denis Puthier
+**Acknowledgements** : Jeanne Chèneby, Cécile Capponi, Benoît Ballester, Denis Puthier

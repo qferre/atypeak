@@ -71,7 +71,8 @@ def configure_tensorflow_session(seed, disable_tensorflow_warnings = True):
     # Disable INFO and WARNING messages
     if disable_tensorflow_warnings:
         print('Tensorflow INFO and WARNING messages are disabled.')
-        os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2'
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2' # Errors only
+        os.environ['KMP_WARNINGS'] = 'off' # Also disable OMP warnings
 
     import tensorflow as tf
     import keras.backend as K
