@@ -87,7 +87,7 @@ else:
 
     # Only do this on true data of course
     if parameters['use_artificial_data'] :
-        raise ValueError("Error : process_full_real_data was set to True, but use_artificial_data is also True.")
+        raise ValueError("Error : process_full_real_data was set to True, but use_artificial_data is also True; `process_full_real_data` cannot be used with artificial data.")
     else:
         print("Writing result BED file for peaks, with anomaly score.")
         print("This can be long (roughly 1 second for 10 CRMs with reasonably-sized queries, like 15 datasets x 15 TFs).")
@@ -97,7 +97,6 @@ else:
         
 
         ## Output BED filepaths
-        # TODO Clean those up a little !
 
         # Source directory
         root_output_bed_path = root_path + '/data/output/bed/' + parameters['cell_line']
@@ -117,32 +116,18 @@ else:
         ### Raw file production
         # Produce a raw, non-normalized file for this cell line
 
-        
         print('Producing scored BED file :',output_bed_path)
         
-        # # TODO number of threads is actually number of processes and optimal might not be 7 ! Try several !
-
+        
         start_prod = time.time()
         er.produce_result_file(all_matrices, output_bed_path,
             get_matrix, parameters, prepare.prepare_model_with_parameters,
             datasets_clean, cl_tfs,
-            nb_threads = parameters["nb_workers_produce_file"], save_model_path = save_model_path)
+            nb_processes = parameters["nb_workers_produce_file"], save_model_path = save_model_path)
         end_prod = time.time()
         total_time_prod = end_prod-start_prod
-        print('Multithread done in',str(total_time_prod),'seconds.')
+        print('Raw data file produced in',str(total_time_prod),'seconds.')
     
-
-        """
-        TODO NOTE THIS IN PAPER MAYBE AND HERE AS NOTES
-        WARNING : TOO LARGE MODELS MAY CONSUME TOO MUCH MEMORY WHEN MULTITHREADED ???
-
-        APPARENTLY TENSORFLOW 2 IS MUCH SLOWER, SO GO BACK TO TENSORFLOW 1 AND USE MULTITHREADING
-        FOR BEST SPEED. SO I DID WELL TO KEEP BOTH CODES, mention we can us both TF 1 or 2 in the readme
-
-        WAIT. TF2 USES ALL THREADS BY DEFAULT AND IS SLOWER ? RAM SHENANIGANS MAYBE ? TRY ON MY VM !
-        I could put it on the readme along with "as of April 2020, we recommend..."
-        """
-
         # Put mean score for doublons of peaks
         utils.print_merge_doublons(bedfilepath = output_bed_path, outputpath = output_bed_merged)
 
@@ -153,7 +138,7 @@ else:
         scores_by_tf_df_raw, scores_by_dataset_df_raw = utils.normalize_result_file_score_by_tf(output_bed_merged,
             cl_name = parameters['cell_line'], outfilepath = output_bed_path_normalized_poub,
             was_corr_group_normalized_before_header = False,
-            center_around = 500) # TODO Use 500 here !?
+            center_around = parameters['tf_normalization_center_around'])
 
 
         ### First normalize by correlation group
@@ -180,19 +165,13 @@ else:
 
         # ----------------------------- Diagnostic plots ----------------------------- #
 
-        if parameters['perform_real_data_diagnosis']:
+        if parameters['perform_processed_data_diagnosis']:
 
-            # TODO Put those in a directory of their own !!!
-            distribution_output_path = plot_output_path + "distribution_score/"
+            # Dedicated directory
+            distribution_output_path = plot_output_path + "distribution_score/" 
             if not os.path.exists(distribution_output_path): os.makedirs(distribution_output_path)
 
-
-
             print('Performing diagnostic plots...')
-
-            # Only if not artificial data.
-            # TODO : those could be useful in artificial as well
-            # As such : rename "perform_real_data_diagnosis" to "perform_processed_data_diagnosis"
 
             # -------- Median of score by TF
 
@@ -249,15 +228,12 @@ else:
 
 
 
-
             # ------------------ Scores of correlation pairs ----------------- #
             # Scores when known cofactors (or known non-cofactors) are present
 
-            print("Retrieving scores for specified TF pairs and estimating correlation groups...")
+            print("Retrieving scores for specified TF pairs on the final BED file...")
 
-
-            # NOTE We work on FINAL NORMALIZED scores after both normalizations. TODO SAY SO IN PAPER FIGURES AND IN DEBUG MESSAGES and/or comments here !!!!!
-
+            # NOTE We work on FINAL normalized scores.
 
             tfs_to_plot = parameters['tf_pairs']
 
@@ -268,6 +244,7 @@ else:
                 try:
                     tf1, tf2 = pair
         
+                    # NOTE We work on FINAL normalized scores.
                     p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_path_final, parameters["CRM_FILE"])      
                     #p, _ = er.get_scores_whether_copresent(tf1, tf2, output_bed_merged, CRM_FILE)  # DEBUG before corr group normalization
                     

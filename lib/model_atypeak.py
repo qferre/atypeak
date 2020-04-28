@@ -74,7 +74,6 @@ def generator_unsparse(matrices_keys, batch_size, matrix_generating_call,
         result = result[...,np.newaxis]
 
         # Remove completely empty matrices
-        # TODO Maybe also remove matrices with one or two peaks only
         summed = np.apply_over_axes(np.sum, result, [1,2,3,4])
         idx = np.flatnonzero(summed)
         result = result[idx,:,:,:,:]

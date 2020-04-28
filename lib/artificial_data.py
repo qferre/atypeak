@@ -127,7 +127,7 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
     k = ss.poisson(1).rvs() + 1
     datasets = np.random.choice(reliable_datasets,k)
-    # TODO Try using different probas as not all datasets correlate. Also weighted choice for imbalances.
+    # TODO Implement weighted choices here 
 
     # Pick common center for the stack
     common_center = int(ss.uniform(0,region_length).rvs())
@@ -177,14 +177,11 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
                 # From analysis, peaks FOR THE SAME TF across different datasets should be very similar.
                 for dataset in datasets :
-                    # TODO Maybe instead we could pick here the 1+ datasets which have this TF.
-                    # This way the TFs would not be replicated across always the same datasets.
                     peaks_stack.append((dataset, tf, center_for_this_tf, length, intensity))
 
 
 
     # In some cases you may not want noise (ie. for pre-training)
-    # TODO Split stack and noise into their own functions
 
     ## NOISE STEP
     if noise :

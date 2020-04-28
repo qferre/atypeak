@@ -59,7 +59,7 @@ print('Parameters loaded.')
 
 
 """
-# TODO  To compute weights for the loss : based on the `crmtf_dict` object and 
+# TODO To compute weights for the loss : based on the `crmtf_dict` object and 
 # also on the `datapermatrix` and `peaks_per_dataset` objects, we know the 
 # number of elements for each combination of TF/dataset.
 """
@@ -175,7 +175,7 @@ def train_model(model, parameters):
         # Save trained model and save the loss as text
         loss_history = model.history.history["loss"]
         model.save(save_model_path+'.h5')
-        np.savetxt(save_model_path+"_loss_history.txt", np.array(loss_history), delimiter=",")
+        np.savetxt(save_model_path+"_loss_history_by_epoch.txt", np.array(loss_history), delimiter=",")
         print('Model saved.')
 
 
@@ -222,7 +222,7 @@ stop_genlist = time.time()
 print('List of many CRMs for evaluation collated in '+str(stop_genlist-start_genlist)+' seconds.')
 
 
-# Figure size. TODO Make this a parameter ?
+# Figure size.
 eval_figsize_small = (5,5)
 eval_figsize_large = (8,5)
 
@@ -246,6 +246,10 @@ if parameters['perform_model_diagnosis']:
 
     # ------------------------------ Evaluation ------------------------------ #
     # Plot some examples of CRMs, their reconstructions and anomaly scores.
+
+    # Where to save the figures 
+    example_output_path = plot_output_path + "crm_examples/"
+    if not os.path.exists(example_output_path): os.makedirs(example_output_path)
     
     i = 0
 
@@ -263,20 +267,21 @@ if parameters['perform_model_diagnosis']:
 
             # 2D - max along region axis
             before_2d = np.max(before, axis=0)
-            plt.figure(figsize=eval_figsize_small); before_2d_plot = sns.heatmap(np.transpose(before_2d), cmap = 'Blues', xticklabels = datasets_clean, yticklabels = cl_tfs)
+            plt.figure(figsize=eval_figsize_small); before_2d_plot = sns.heatmap(np.transpose(before_2d), cmap = 'Blues', xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
             prediction_2d = np.max(prediction, axis=0)
-            plt.figure(figsize=eval_figsize_small); prediction_2d_plot = sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
+            plt.figure(figsize=eval_figsize_small); prediction_2d_plot = sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
 
             anomaly_matrix = er.anomaly(before, prediction)
             anomaly_plot = utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
 
 
-            # Save the figures 
-            example_output_path = plot_output_path + "crm_example/"
-            if not os.path.exists(example_output_path): os.makedirs(example_output_path)
 
-            before_2d_plot.get_figure().savefig(example_output_path + "example_crm_before_2dmax_"+str(i)+".pdf")
-            prediction_2d_plot.get_figure().savefig(example_output_path + "example_crm_rebuilt_2dmax_"+str(i)+".pdf")
+
+            before_2d_plot.tight_layout()
+            before_2d_plot.savefig(example_output_path + "example_crm_before_2dmax_"+str(i)+".pdf")
+            prediction_2d_plot.tight_layout()
+            prediction_2d_plot.savefig(example_output_path + "example_crm_rebuilt_2dmax_"+str(i)+".pdf")
+            
             anomaly_plot.savefig(example_output_path + "example_crm_anomaly_"+str(i)+".pdf")
             
             plt.close('all') # Close all figures
@@ -311,10 +316,11 @@ if parameters['perform_model_diagnosis']:
     # Do not consider the zeros where a peak was not placed, only the peaks and the rebuilt peaks
     anomaly_values = np.ma.masked_equal(summed_anomalies, 0)
     median_anomaly_values = np.ma.median(anomaly_values, axis=0)
-    plt.figure(); median_anomaly_values_plot = sns.heatmap(median_anomaly_values.transpose(), annot = True, fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
+    plt.figure(); median_anomaly_values_plot = sns.heatmap(median_anomaly_values.transpose(), annot = True, fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs, cmap = 'Purples').get_figure()
 
     # Save this as a diagnostic plot
-    median_anomaly_values_plot.get_figure().savefig(plot_output_path+'median_anomaly_score.pdf')
+    median_anomaly_values_plot.tight_layout()
+    median_anomaly_values_plot.savefig(plot_output_path+'median_anomaly_score.pdf')
     
     plt.close('all') # Close all figures
 
@@ -349,17 +355,16 @@ if parameters['perform_model_diagnosis']:
     if not os.path.exists(qscore_output_path): os.makedirs(qscore_output_path)
 
     qscore_plot.savefig(qscore_output_path+'qscore_plot.pdf')
-    corr_plot.savefig(qscore_output_path+'corr_plot_datasets_then_tf.pdf')
-    posvar_x_res_plot.savefig(qscore_output_path+'posvar_when_both_present_plot_datasets_then_tf.pdf')
+    corr_plot.savefig(qscore_output_path+'correlation_matrix_dims.pdf')
+    posvar_x_res_plot.savefig(qscore_output_path+'posvar_when_both_present.pdf')
 
-    np.savetxt(plot_output_path+'q_score.tsv', q, delimiter='\t')
+    np.savetxt(qscore_output_path+'q_score.tsv', q, delimiter='\t')
 
     print("Q-score evaluation results saved.")
 
     plt.close('all') # Close all figures
     
     
-
 
     """
     ## WIP Grid search part
@@ -419,8 +424,7 @@ if parameters['perform_model_diagnosis']:
     ENCODED_LAYER_NUMBER = 15
     # To check this is the correct number
     if not (model.layers[ENCODED_LAYER_NUMBER].name == 'encoded'):
-        print("ENCODED_LAYER_NUMBER not set to the encoded dimension. Urexamples will be on a different dimension.")
-    # TODO Replace with something like model.get_layer("encoded")
+        print("ENCODED_LAYER_NUMBER in the code not set to the encoded dimension. Urexamples will be on a different dimension.")
 
     print("Computing ur-examples. Can be long...")
     urexamples = cp.compute_max_activating_example_across_layer(model, random_state = 42,
@@ -429,15 +433,16 @@ if parameters['perform_model_diagnosis']:
                                 blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5,
                                 debug_print = False)
     
-    urexample_output_path = plot_output_path + "urexample_encoded_dim/"
+    urexample_output_path = plot_output_path + "urexamples_encoded_dim/"
     if not os.path.exists(urexample_output_path): os.makedirs(urexample_output_path)
 
     for exid in range(len(urexamples)):
         ex = urexamples[exid]
         ex = ex[...,0]
         x = np.mean(ex, axis = 0)
-        plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0, annot = True, fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs)
-        urfig.get_figure().savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
+        plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0, xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
+        urfig.tight_layout()
+        urfig.savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
         plt.close('all') # Close all figures
 
     """
@@ -458,6 +463,8 @@ if parameters['perform_model_diagnosis']:
 
     corrgroup_estim_output_path = plot_output_path + "estimated_corr_groups/"
     if not os.path.exists(corrgroup_estim_output_path): os.makedirs(corrgroup_estim_output_path)
+
+    print("Estimating correlation groups...")
 
     for combi in parameters['estimate_corr_group_for']:
         try:
@@ -524,11 +531,18 @@ if parameters['perform_model_diagnosis']:
         And maybe leave a note here ?
         """
 
-        average_crm_fig.savefig(plot_output_path+'average_crm_2d.pdf')
-        tf_corr_fig.savefig(plot_output_path+'tf_correlation_matrix.pdf')
-        dataset_corr_fig.savefig(plot_output_path+'dataset_correlation_matrix.pdf')
-        tf_abundance_fig.savefig(plot_output_path+'tf_abundance_total_basepairs.pdf')
-        dataset_abundance_fig.savefig(plot_output_path+'dataset_abundance_total_basepairs.pdf')
+        data_stats_output_path = plot_output_path + "data_stats/"
+        if not os.path.exists(data_stats_output_path): os.makedirs(data_stats_output_path)
+
+
+        average_crm_fig.savefig(data_stats_output_path+'average_crm_2d.pdf')
+        tf_corr_fig.savefig(data_stats_output_path+'tf_correlation_matrix.pdf')
+        dataset_corr_fig.savefig(data_stats_output_path+'dataset_correlation_matrix.pdf')
+        tf_abundance_fig.savefig(data_stats_output_path+'tf_abundance_total_basepairs.pdf')
+        dataset_abundance_fig.savefig(data_stats_output_path+'dataset_abundance_total_basepairs.pdf')
+        # TODO HAVE NOT SEEN THEM BE PRODUCED !!! WHY ?????
+
+
 
         plt.close('all') # Close all figures
 

@@ -4,11 +4,10 @@ SHELL = /bin/bash
 
 # ------------------------------ Parameters ---------------------------------- #
 
-# The CRM matrices should have this size (for makewindows, padding will be
-# done in Python later)
+# The CRM matrices should have this size (for makewindows only; final padding will be done in Python later)
 CRM_WINDOW_SIZE = 3200
 
-# File names (relative to `input_raw` directory) after decompressio
+# File names (relative to `input_raw` directory) after decompression
 CRM_FILE = remap2018_crm_macs2_hg38_v1_2_selection.bed
 PEAKS_FILE = remap2018_peaks_hg38_v1_2_selection.bed
 
@@ -44,10 +43,27 @@ process:
 	conda activate atypeak
 	python3 process.py
 
+# Make an individual run (train and process) for all parameter files in parameters_multi
+run_all:
+	# Save old parameters if present
+	[[ ! -f parameters.yaml ]] || mv parameters.yaml parameters.yaml.old	
+	# Temporarily replace parameters and Run the FULL analysis for each
+	for p in parameters/* ;	do
+		cp $$p parameters.yaml 
+
+		echo "# ------- $${p} IN PROGRESS ------- #"
+		make run	
+		
+		rm parameters.yaml
+	done
+	# Restore parameters
+	[[ ! -f parameters.yaml.old ]] || mv parameters.yaml.old parameters.yaml	
+
+
 
 ## Cleaning
 
-clean :
+clean:
 	# Remove all data and results
 	rm -rf ./data/input/
 	rm -rf ./data/output/
@@ -144,7 +160,7 @@ dictionaries:
 	cut sorted_intersect.txt -f1,2,3,4 | uniq |\
 	rev | uniq -f1 -c | rev | tr ' ' '\t' | cut -f1,2,3,5 > nb_datasets_per_matrix.txt
 	# WARNING the line counts are reversed due to the commands used here (they will be reversed again in Python processing)
-	# TODO Would be used for weighted losses.
+	# Would be used for weighted losses.
 
 	# Clean up
 	rm -f cell_line_crm_tf_tuples_untreated.txt

@@ -1,0 +1,64 @@
+# ---------------------------- Data processing ------------------------------- #
+cell_line: "jurkat"
+CRM_FILE: "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
+
+# ---------------------------- Execution ------------------------------------- #
+load_saved_model: False
+process_full_real_data: True
+
+use_artificial_data: False
+perform_model_diagnosis: True
+perform_processed_data_diagnosis: True
+
+random_seed: 1234 
+disable_tensorflow_warnings: True
+
+# ---------------------------- Autoencoder model ----------------------------- #
+nn_kernel_nb: 32
+nn_deep_dim: 256
+nn_optimizer_learning_rate: 0.0001
+
+tf_weights: null
+datasets_weights: null
+
+pad_to: 3200
+crumb: 0.1
+squish_factor: 10
+
+nn_batch_size: 48
+nn_optimizer: "adam"
+nn_batches_per_epoch : 48
+nn_number_of_epochs : 64
+nn_fit_verbosity: 1
+
+nn_early_stop_min_delta: 0.00025
+nn_early_stop_patience: 5
+nn_early_stop_loss_absolute: 0 
+
+nn_kernel_width_in_basepairs: 20
+nn_reg_coef_filter: 0.0025
+nn_pooling_factor: 2
+
+nb_workers_produce_file: 4 
+
+# ---------------------------- Diagnostic ------------------------------------ #
+tf_normalization_center_around: 750
+
+nb_batches_generator_for_diag_list_of_many_crms: 200
+
+tf_pairs:
+  - ["erg", "gabpa"]
+  - ["ctcf", "gabpa"]
+  - ["ctcf", "runx1"]
+
+estimate_corr_group_for:
+  - ["None", "None"]
+
+example_nb_batches: 1
+
+artificial_tfgroup_split: 0.666
+artificial_overlapping_groups: False 
+artificial_nb_datasets: 8
+artificial_nb_tfs: 8
+artificial_ones_only: True
+artificial_watermark_prob: 0.75

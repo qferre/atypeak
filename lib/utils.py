@@ -157,7 +157,7 @@ def plot_3d_matrix(mat, figsize=(10,6),
 
     # If required, remove elements from `coordinates` if they are equal to zero
     # TODO It works, but is slow. Try to optimize this.
-    if no_zeros :
+    if no_zeros:
         for xi in xu.ravel():
             for yi in yu.ravel():
                 for zi in zu.ravel():
@@ -295,8 +295,7 @@ def produce_result_bed(origin_data_file, anomaly_matrix,
         result = (str(peak[4])+'\t'+str(xmin_original)+'\t'+str(xmax_original)+'\t'+
             peak[3]+'.'+peak[2]+'.'+peak[0]+'\t'+ #peak[the dataset]+'.'+peak[the tf]+'.'+peak[the cell line]+'\t'+
             str(anomaly_score)+'\t'+'.')
-        # TODO Maybe add gregariousness, ie. how many peaks in the same row, column, or entire CRM.
-        # Also keep the MACS score and the peak center ?
+        # TODO Keep the MACS score and the peak center ?
 
         result_bed.append(result)
 

@@ -29,7 +29,7 @@ def get_plot_output_path(parameters):
 
 def get_indexes(parameters, crmid, datasets, cl_tfs):
 
-    # TODO Datasets : might wish to use a parent name later
+    # Datasets: might wish to use a parent name later
     #datasets_clean_ori = [dr.dataset_parent_name(d) for d in datasets] 
     # Make unique while preserving order, which a `set` would not do
     datasets_clean = sorted(list(set(datasets)), key=datasets.index) 
@@ -65,8 +65,8 @@ def configure_tensorflow_session(seed, disable_tensorflow_warnings = True):
     Macro to create and configure a Tensorflow session for reproducibility.
     Was moved to allow subprocesses to create their own TF sessions.
     """
-    # TODO Use this in multiprocessing result creation as well ? May not be needed
-    # since I am just reloading a model
+    # TODO Use this in multiprocessing result creation as well ? Should not be
+    # needed since I am just reloading a model
 
     # Disable INFO and WARNING messages
     if disable_tensorflow_warnings:
@@ -169,7 +169,7 @@ def prepare_model_with_parameters(parameters, nb_datasets_model, nb_tfs_model, r
 
     # Print summary of the model (only if not artificial)
     if (not parameters['use_artificial_data']) and (root_path is not None) :
-        with open(root_path+'/data/output/model/'+parameters['cell_line']+'model_architecture.txt','w') as fh:
+        with open(root_path+'/data/output/model/'+parameters['cell_line']+'_model_architecture.txt','w') as fh:
             model.summary(print_fn=lambda x: fh.write(x + '\n'))
 
 

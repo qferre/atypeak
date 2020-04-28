@@ -2,6 +2,7 @@
 # Results are done by cell line and will go in the appropriate directory.
 cell_line: "hela"
 # Change this parameter to process a different cell line.
+# Will be ignored when using artificial data.
 
 # Path to the CRM file. Should have the same value than in the Makefile.
 CRM_FILE: "./data/input_raw/remap2018_crm_macs2_hg38_v1_2_selection.bed"
@@ -19,14 +20,13 @@ process_full_real_data: True
 #### Diagnosis
 
 # If True, you will use only artificial data. Used to demonstrate that the model can learn correlation groups.
-use_artificial_data: False
+use_artificial_data: True
 
 # If reloading a known model, you may want to set this to False and skip the diagnosis steps (Q-score, etc.)
 perform_model_diagnosis: True
 
-# The below will perform diagnosis on real data : average score per crm, alone+both plots, that kind of stuff
-# You should likely leave it at True
-perform_real_data_diagnosis: True
+# The below will perform diagnosis on result data, after processing : average score per crm, alone+both plots, etc. You should likely leave it at True
+perform_processed_data_diagnosis: True
 
 
 #### Others
@@ -39,10 +39,10 @@ disable_tensorflow_warnings: True
 # ------ Those are the key parameters for the information budget
 
 ## Architecture
-nn_kernel_nb: 32
-nn_deep_dim: 256
+nn_kernel_nb: 24
+nn_deep_dim: 64
 ## Training
-nn_optimizer_learning_rate: 0.0001  # NOTE Default for Adam is 0.001 (!)
+nn_optimizer_learning_rate: 0.001  # NOTE Default for Adam is 0.001 (!)
 
 
 # ------  You likely won't need to modify the parameters below
@@ -79,9 +79,8 @@ nn_pooling_factor: 2
 
 
 # How many workers to use when multithreading file production. At least 1.
-# WARNING For very large dimensions/models, this may use a lot of RAM.
 nb_workers_produce_file: 4 
-
+# NOTE Higher number of processes is not always faster, and will increase RAM footprint which can be problematic for very large models/dimensions
 
 # ---------------------------- Diagnostic ------------------------------------ #
 
@@ -99,49 +98,17 @@ nb_batches_generator_for_diag_list_of_many_crms: 200
 ## Distribution of scores depending on TF presence.
 # Gives the [A, B] pairs to visualize whether the presence of one affects the score of the other
 # Only used in real data, not artificial
-
-# FOR JURKAT
-# tf_pairs:
-#   - ["erg","gabpa"]
-#   - ["ctcf","gabpa"]
-#   - ["ctcf","runx1"]
-
-# FOR HELA
 tf_pairs:
-  - ["ell2", "aff4"]
-  - ["e2f1", "phf8"]
-  - ["aff4", "znf143"]
-  - ["brd4", "rcor1"]
-  - ["znf143", "rcor1"]
-  - ["ell2", "phf8"]
-  - ["ell2", "brd4"]
-  - ["sfmbt1", "rcor1"]
-  - ["sfmbt1", "brd4"]
-  - ["brd4", "phf8"]
-
-# FOR K562:
-# tf_pairs:
-#   - ["ctcf","rad21"]
-#   - ["fos","jun"]
-#   - ["irf1","atf1"]
-#   - ["ctcf","jun"]
-#   - ["gata1","gata2"]
-
+  - ["tf_2", "tf_3"]
+  - ["tf_2", "tf_6"]
 
 ## Correlation group estimation
 # By looking at what kinds of phantoms are added, estimate the correlation groups learned by the model for the following sources
 # Each line should contain a source, which is a {dataset, TF} pair given in that order below
-
-# FOR HELA
 estimate_corr_group_for:
-    - ['GSE40632','aff4']
-    - ['GSE45441','sfmbt1']
-    - ['GSE22478','phf8']
-    - ['GSE51633','brd4']
-
-# FOR ARTIFICIAL
-# estimate_corr_group_for:
-#     - ['dat_1','tf_1']
+  - ['dat_0','tf_0']
+  - ['dat_5','tf_2']
+  - ['dat_5','tf_6']
 
 # ------  You likely won't need to modify the parameters below
 
@@ -149,8 +116,8 @@ estimate_corr_group_for:
 example_nb_batches: 1
 
 ### Artificial data parameters
-artificial_tfgroup_split: 0.666
-artificial_overlapping_groups: False  # If True, the groups will be {AB,A} instead of {A,B}
+artificial_tfgroup_split: 0.5
+artificial_overlapping_groups: True  # If True, the groups will be {AB,A} instead of {A,B}
 
 artificial_nb_datasets: 8
 artificial_nb_tfs: 8

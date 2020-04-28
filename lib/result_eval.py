@@ -84,7 +84,6 @@ def produce_result_for_matrix(m,
     current_matrix, origin_data_file, crm_start = get_matrix_method(m, return_data_lines = True)
 
     # Pad the matrix (much like we do in model_atypeak.generator_unsparse)
-    # TODO The method must also return crm_length then for coordinate correction !
     crm_length = current_matrix.shape[0]
     current_matrix_padded = np.pad(current_matrix, pad_width = ((parameters["pad_to"] - crm_length,0),(0,0),(0,0)), mode='constant', constant_values=0)
 
@@ -173,7 +172,7 @@ def produce_result_file(all_matrices, output_path, #model,
     get_matrix_method, parameters, model_prepare_function,
     datasets_clean, cl_tfs,
     add_track_header = True,
-    nb_threads = 1,
+    nb_processes = 1,
     save_model_path = None):
     """
     Will take all CRM whose ID is in all_matrices, rebuild them with the
@@ -190,38 +189,8 @@ def produce_result_file(all_matrices, output_path, #model,
     result = list()
 
     print('Beginning processing...')
-
-
-    """
-    # TODO what is actually the big performance hog
-    THIS IS IMPORTANT AND CAN AFFECT THE PAPER because I wrote such things in the paper !! MUST DETERMINE EXACTLY WHICH PART IS THE BOTTLENECK !!!!
-
-    The time taking by generating list_of_many_CRMs suggests that the generator was the problem though !
-    
-    MUST CHECK THIS CAREFULLY !!!
-
-
-    Okay. The revised picture that emerges is that here matrix collection and model prediction
-    account each for half of the time (or more 1/2-2/3), with the rest negligible.
-        This should be said in the paper !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-    This is likely similar for training, should say that as well
-
-
-    AND NEW TESTING SHOWS THAT MATRIX COLLECTION CAN BE MULTIPROCESSED ALITTLE. SO I RETRY.
-
-    NOTE : IF THE PROCESSING TIMES ARE SHORTENED BY THIS, SAY SO IN PAPER AND CHANGE THE WARNING PRINTED IN THE CODE !!
-
-    YES THEY ARE. MULTIPROCESSING IS A GOOD IDEA.
-    TODO ADD A SENTENEC IN THE PAPER ABOUT IT ? Is that really necessary ? Yeah in the time consumption part
-
-    """
-
-   
-
-    
-    if nb_threads < 2:
+  
+    if nb_processes < 2:
 
         print("Mono threaded")
 
@@ -258,16 +227,16 @@ def produce_result_file(all_matrices, output_path, #model,
         print(" -- Done.")
 
 
-    if nb_threads >= 2:
+    if nb_processes >= 2:
         
         print("Multi threaded")
 
         mana = multiprocessing.Manager()
         result_queue = mana.Queue()
-        pool = MonitoredProcessPoolExecutor(nb_threads)
+        pool = MonitoredProcessPoolExecutor(nb_processes)
 
         # Split into as many batches as there are child processes 
-        minibatches = np.array_split(np.array(all_matrices), nb_threads)
+        minibatches = np.array_split(np.array(all_matrices), nb_processes)
 
         args = {
             "save_model_path":save_model_path,
@@ -279,7 +248,7 @@ def produce_result_file(all_matrices, output_path, #model,
             "result_queue":result_queue }
 
         # Submit to the pool of processes
-        for i in range(nb_threads):
+        for i in range(nb_processes):
             pool.submit(result_file_worker, minibatch = minibatches[i], **args)
             print("Submitted job.")
 
@@ -530,7 +499,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # We retake before_other that contains more or less all peaks that are
         # not in the current correlation group
 
-        full_crm_3d_others = np.stack([before_others]*320, axis=0).astype('float64') # TODO UNHARDCODE THE 320 ABOVE !!
+        full_crm_3d_others = np.stack([before_others]*int(crm_length/squish_factor), axis=0), axis=0).astype('float64')
         #if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
         predictionf_others = model.predict(full_crm_3d_others[np.newaxis,...,np.newaxis])[0,:,:,:,0]
         prediction_2df_others = np.mean(predictionf_others, axis=0) # 2D - mean along region axis
@@ -1205,21 +1174,7 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
     peak_nb_fact = np.log2(peaks_nb)
 
-
-
-    # TODO TESTING
-    #peak_nb_fact = np.clip(peak_nb_fact, 0, 2)
-    peak_nb_fact[(peak_nb_fact !=1) & (peak_nb_fact !=2) & (peak_nb_fact !=3)] = -1
-
-
     res['nb_peaks_fact'] = peak_nb_fact.astype(int).astype(str)
-
-
-
-    # TODO TESTING
-    #res = res.head()
-    #print(res.head())
-    #res.to_csv('./test_crm.tsv', sep = '\t')
 
     # Plots
     p = ggplot(res, aes(x='nb_peaks_fact', y='average_score')) + geom_violin() + xlab("Number of peaks (log2)") + geom_boxplot(width=0.1)

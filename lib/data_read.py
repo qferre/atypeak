@@ -137,7 +137,7 @@ def process_data_file_into_2d_matrix(subfile, datasets_names, crm_min, crm_max, 
         line_of_matrix = names_ordered[current_dataset]
 
         # Get score and peak summit if applicable
-        # TODO Use it
+        # TODO Use it at some point
         if use_scores:
             score_peak = line[7]
             peak_summit = line[8]
