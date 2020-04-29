@@ -499,7 +499,7 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # We retake before_other that contains more or less all peaks that are
         # not in the current correlation group
 
-        full_crm_3d_others = np.stack([before_others]*int(crm_length/squish_factor), axis=0), axis=0).astype('float64')
+        full_crm_3d_others = np.stack([before_others]*int(crm_length/squish_factor), axis=0).astype('float64')
         #if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
         predictionf_others = model.predict(full_crm_3d_others[np.newaxis,...,np.newaxis])[0,:,:,:,0]
         prediction_2df_others = np.mean(predictionf_others, axis=0) # 2D - mean along region axis
@@ -1159,7 +1159,7 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
 
     ## Average (and max) score per number of peaks in CRM
     res = pd.DataFrame(columns=['nb_peaks', 'average_score', 'max_score'])
-    for name, group in df_gp:
+    for _, group in df_gp:
         scores = [float(s) for s in group['anomaly_score']]
         npe = len(scores)
         asn = np.mean(scores)
@@ -1212,7 +1212,7 @@ def get_scores_whether_copresent(tf_A, tf_B, atypeak_result_file, crm_file_path)
     df[['dataset','tf','cell_line']] = df['name'].str.split('.', expand = True)     # Get peak info for all crm
     df_gp = df.groupby(['full_crm_coordinate']) # Now group by CRM
 
-    for name, group in df_gp:
+    for _, group in df_gp:
 
         # Is A present ? Is B present ? Are they both present ?
         present_tfs = set(group.loc[:,'tf'].tolist())
