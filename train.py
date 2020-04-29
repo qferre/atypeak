@@ -518,33 +518,24 @@ if parameters['perform_model_diagnosis']:
 
 
 
-        # ------------ Data information plots for result checking ------------ #
-        # Diagnostic plots on the data, such as correlation coefficients and abundances
-        # Not done on our model, just on the source data. Used to check model results.
-        # TODO Those are already calculated for the Q-score, merge code  
+    # -------------- Data information plots for result checking -------------- #
+    # Diagnostic plots on the data, such as correlation coefficients and abundances
+    # Not done on our model, just on the source data. Used to check model results.
+    # TODO Those are already calculated for the Q-score, merge code  
 
-        average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
+    average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
+    # NOTE Some "+" shape ghosts in the information plots (average CRM) can be due to summed crumbing.
 
+    data_stats_output_path = plot_output_path + "data_stats/"
+    if not os.path.exists(data_stats_output_path): os.makedirs(data_stats_output_path)
 
-        """
-        # Careful : some horizontal "ghosting" in the information plots (average CRM) might be due to summed crumbing. TODO NOTE IN PAPER !!!! IN THE FIGURE LEGENDS
-        And maybe leave a note here ?
-        """
+    average_crm_fig.savefig(data_stats_output_path+'average_crm_2d.pdf')
+    tf_corr_fig.savefig(data_stats_output_path+'tf_correlation_matrix.pdf')
+    dataset_corr_fig.savefig(data_stats_output_path+'dataset_correlation_matrix.pdf')
+    tf_abundance_fig.savefig(data_stats_output_path+'tf_abundance_total_basepairs.pdf')
+    dataset_abundance_fig.savefig(data_stats_output_path+'dataset_abundance_total_basepairs.pdf')
 
-        data_stats_output_path = plot_output_path + "data_stats/"
-        if not os.path.exists(data_stats_output_path): os.makedirs(data_stats_output_path)
-
-
-        average_crm_fig.savefig(data_stats_output_path+'average_crm_2d.pdf')
-        tf_corr_fig.savefig(data_stats_output_path+'tf_correlation_matrix.pdf')
-        dataset_corr_fig.savefig(data_stats_output_path+'dataset_correlation_matrix.pdf')
-        tf_abundance_fig.savefig(data_stats_output_path+'tf_abundance_total_basepairs.pdf')
-        dataset_abundance_fig.savefig(data_stats_output_path+'dataset_abundance_total_basepairs.pdf')
-        # TODO HAVE NOT SEEN THEM BE PRODUCED !!! WHY ?????
-
-
-
-        plt.close('all') # Close all figures
+    plt.close('all') # Close all figures
 
 
 print("Model succesfully trained and diagnosed !")
