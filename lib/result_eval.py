@@ -1,5 +1,5 @@
 """
-Functions to compute scores, produce result, and evaluate the model.
+Functions to compute scores, produce result files, and evaluate the model.
 
 These functions are used both by the model (notably anomaly score calculation) and the diagnostic functions.
 """
@@ -38,9 +38,8 @@ def anomaly(before, prediction):
     Anomaly score between a true (`before`) and predicted (`prediction`) CRMs.
     Both argument should be 3d NumPy arrays.
 
-    WARNING : May be a misnomer, as a score of 1 means "good", not "anomalous !"
-
-    Note : this is all designed to work with scores, but for now the peaks all have scores of 1 when present.
+    WARNING: May be a misnomer, as a score of 1 means "good", not "anomalous !"
+    NOTE: this is all designed to work with peak scores, but for now the peaks all have scores of "1" which simply means present.
     """
 
     # TODO Return the un-crumbed matrix for use as a mask ? Not needed if I don't visualize it, since I query the values based on the original peaks coordinates
@@ -49,27 +48,15 @@ def anomaly(before, prediction):
     mask = np.clip(np.around(before, decimals = 1),0,1)
     mask[ mask !=0 ] = 1 # This is 0 where there is no peak, and 1 where there is one
 
-
     ## Anomaly score computation
     anomaly = 1 - ((before+1E-100) - prediction)/(before+1E-100)
-    # WARNING this considers higher plotting as an anomaly ! We want mostly
+    # WARNING this considers higher plotting as an anomaly ! This can be corrected later
     # Divide by before, otherwise when peaks with low scores are discarded. Not useful now since before is always 1, but future-proofing.
+    # NOTE : This is 1 - difference, so the score is actually high for good peaks !
 
     anomaly = np.clip(anomaly, 1E-5, np.inf) # Do not clip at 0 or it will not be plotted
 
     return anomaly * mask
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -100,8 +87,7 @@ def produce_result_for_matrix(m,
                                         datasets_clean, cl_tfs,
                                         crm_start, crm_length,
                                         debug_print = False)
-    
-    # WARNING : This is 1 - anomaly, so the score is actually high for good peaks !! TODO Emphasize it more
+
     return result
 
 
@@ -130,11 +116,9 @@ class MonitoredProcessPoolExecutor(ProcessPoolExecutor):
 
 
 
-
 def result_file_worker(minibatch, save_model_path,
     get_matrix_method, parameters, datasets_clean, cl_tfs,
     model_prepare_function,result_queue):
-
 
     # Please don't send me console outputs
     import os, sys
@@ -144,7 +128,7 @@ def result_file_worker(minibatch, save_model_path,
     with redirect_stdout(f):
         with redirect_stderr(f):
 
-            # Create keras session here for the worker
+            # Create Keras session here *and here only* for the worker
             os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2'  # No TF logs unless errors
 
             # NOTE KMP_AFFINITY can lock all processes to the same core.
@@ -255,8 +239,7 @@ def produce_result_file(all_matrices, output_path, #model,
        
         # Control print while there are still active workers
         while pool.get_pool_usage() > 0:
-            #print(pool.get_pool_usage())
-            time.sleep(0.05) # Prevent a flurry of messages
+            time.sleep(0.025) # Prevent a flurry of messages
             cnt = result_queue.qsize()
             sys.stdout.write("\r" +"Processed CRMs currently : "+str(cnt)+" / "+str(len(all_matrices)))
             sys.stdout.flush()
@@ -307,17 +290,16 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
     average_crm = np.mean(np.array(list_of_many_crms), axis=0)
     average_crm_2d = np.mean(average_crm, axis = 0)
 
-
     # Open output file
     logcombifile = open(outfilepath,'w')
-    header="dataset\ttf\tintra_group_weight\tinter_group_weight\toverlapping_group_weight\tfinal_k\n" # TODO Only at beginning OFC
+    header="dataset\ttf\tintra_group_weight\tinter_group_weight\toverlapping_group_weight\tfinal_k\n" # Only at beginning of course
     logcombifile.write(header)
 
     
-    # ------------------ PREPARING SOME PREDICTIONS
+    # ------------------ Preparation
 
-    ###### FULL CRM
-    # Full CRM where there is a peak everywhere there can be
+    ######## Full CRM
+    # Full CRM where there is a peak everywhere there could be one
     full_crm_2d = (average_crm_2d>0).astype(int) 
     full_crm_3d = np.stack([full_crm_2d]*int(crm_length/squish_factor), axis=0).astype('float64')
     #full_crm_3d = np.stack([[0*full_crm_2d]*210 + [full_crm_2d]*10 + [0*full_crm_2d]*100], axis=0).astype('float64')
@@ -327,13 +309,13 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
     before_2df = np.mean(full_crm_3d, axis=0)
 
+    # Careful about "affine effect".
+    # NOTE It seems, if the before value is too high, the resuting rebuilding 
+    # is not simply linearlity increased but "drags with it" all possible peaks.
+    BEFORE_VALUE = 1 
 
 
-    BEFORE_VALUE = 1 # Careful about affine effect. TODO Write somewhere.
-
-
-
-    ###### BEFORE = THIS SOURCE ONLY
+    ######## Rebuilt tensor when the before tensor contains *this source only*
 
     def pred_for_this_source_only_internal(curr_dataset_id, curr_tf_id):
         # Put a peak only for this tf+dataset combi (ie. this source) and look at the phantoms
@@ -341,9 +323,6 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # This will be used in two steps
         x = np.zeros((crm_length,len(all_datasets),len(all_tfs))) # Create an empty CRM
 
-        # Add a major peak for this particular dataset+tf pair across the entire region
-        # Use a value of 10 or 100 to force MSE to show groups ??
-        # No use 1 instead to prevent affine pbs
         x[:,curr_dataset_id, curr_tf_id] = BEFORE_VALUE
         if use_crumbing: x = utils.add_crumbing(x) # Add crumbing
         before_2d_p = np.mean(x, axis=0)
@@ -351,17 +330,14 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         xp = utils.squish(x, factor = squish_factor)
         xp2 = xp[np.newaxis, ..., np.newaxis]
         prediction = model.predict(xp2)[0,:,:,:,0]
-        prediction_2d = np.mean(prediction, axis=0) # 2D - mean along region axis # VERY IMPORTANT THAT HERE IT IS THE MEAN. TODO SAY SO IN PAPER !!!
+        prediction_2d = np.mean(prediction, axis=0) # 2D - mean along region axis (important)
         return before_2d_p, prediction_2d
 
 
-    # WARNING 
-    # IT IS CRITICAL THAT average_crm_2d BE NOT CRUMBED FOR LATER CALCULATIONS (ie inferring a full crm from the first weight)
-    # NOTE I MUST ADD NOTES where I generate the list_of_many_CRMS to NOT ADD CRUMBING THERE !!!
+    # NOTE It is critical that average_crm_2d *NOT* be crumbed for later calculation (inferring a full CRM).
+    # Ensure that when we generate list_of_many_crms we properly remove crumbing. 
 
-
-
-    # Preparing intra weight mask; harmonize with rest of code !
+    # Preparing intra weight mask; TODO harmonize with rest of code !
     # See explanations for this code below. It is done here because we need to have all intra_weights
     # before we calculate the next weight
     intra_weight_mask = np.zeros((len(all_datasets),len(all_tfs)))
@@ -370,55 +346,36 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         curr_dataset_id, curr_tf_id = all_datasets.index(curr_dataset), all_tfs.index(curr_tf)
         before_2d_p, prediction_2d = pred_for_this_source_only_internal(curr_dataset_id, curr_tf_id)
         
-        # Only nonzero terms that correspond to a real peak : discard negative influences, and crumbing
-        #before_sum = np.sum((before_2d_p * full_crm_2d))
-        #before_sum = before_2d_p[curr_dataset_id, curr_tf_id] # HOTFIX use this only due to crumbing making sums different if we use the line above
-        #prediction_sum = np.sum((prediction_2d * full_crm_2d)[prediction_2d>0])
-        # never mind, it didn't help, was not justifiable and could cause problems of its own
-        iw = np.sum(before_2d_p)/np.sum(prediction_2d)
-        #iw = before_sum/prediction_sum
-        
+        iw = np.sum(before_2d_p)/np.sum(prediction_2d)   
 
         intra_weight_mask[curr_dataset_id, curr_tf_id] = iw
 
 
-
-
+    ## Now process all possible sources (TF+dataset pair)
     for combi in all_combis:
 
-        # Combi information
-        curr_dataset = combi[0] # get id in list of the dataset
-        curr_tf = combi[1] # get id in list of the tf
+        # Source Combi information
+        curr_dataset = combi[0] # get id in list of the datasets
+        curr_tf = combi[1] # get id in list of the tfs
         # Convert dataset and tf to the approriate coordinates
         curr_dataset_id = all_datasets.index(curr_dataset)
         curr_tf_id = all_tfs.index(curr_tf)
 
-
-
-
-        # Get the phantoms when trying to predict a CRM with this source only !
+        # Get the phantoms when trying to predict a CRM with this source only
         before_2d_p, prediction_2d = pred_for_this_source_only_internal(curr_dataset_id, curr_tf_id)
 
-
-
         # Prepare a mask that contains more or less all peaks that are not in the current correlation group
-        value_in_real_full = before_2df[curr_dataset_id,curr_tf_id]
+        value_in_real_full = before_2df[curr_dataset_id,curr_tf_id] # The value it would have in a full CRM
         normalized_pred = prediction_2d/prediction_2d[curr_dataset_id,curr_tf_id]
-        # TODO REMEMBER TO WRITE ALSO IN PAPER : the second term represents the value IT WOULD HAVE IN A FULL CRM
+
         others_mask = normalized_pred * value_in_real_full
         before_others = np.clip(before_2df - others_mask, 0, 2) # Floor at 0 and cap at 2 to prevent biases in others_mask and
-        
-        
+               
+     
 
-        
+        # ------------------------- Computing weights ------------------------ #
 
-        # ------------------ COMPUTING WEIGHTS
-
-
-
-
-        # --- Intra group bias
-
+        # ---- Intra group bias
         # See the ratio between sum of prediction and sum of before
         # If there is an intra group bias in favor of the source, it will be higher (nonwithstanding group size, later on)
         # This has been calculated above, use it
@@ -426,81 +383,64 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
 
 
         # ---- Inter group bias
-
-        # Groups are not always complete in the same proportion : ABC might have usually 2 out of 3 members, while ABCDEF migt have usually 2 out of 6 members
-        # Ie. completeness bias
-        # NOTE KEEP THIS
-        # Correlation groups reach a rebuilt value of 1 on each peak (hmm after normalizing intra group BE CAREFUL NOTE THIS SOMEWHERE ELSE) when complete, but we
-        # need to normalize this by "how complete are they typically"
+        # Groups are not always complete in the same proportion : ABC might have
+        # usually 2 out of 3 members, while ABCDEF migt have usually 2 out of 6
+        # members. Correlation groups reach a rebuilt value of 1 on each peak
+        # when complete, but we need to normalize this by "how complete are they typically"
 
         # Try to estimate the "request", ie. the group this source belongs to, by looking at
         # the added phantoms, which are the peaks that were expected
-        request = prediction_2d # TODO NOTE IN PAPER METHODS AND HERE THIS IS IMPERFECT AND FALSE (by which I mean not rigorous) BUT A GOOD ESTIMATION OF THE REQUEST
+        request = prediction_2d 
+        # This is not exactly true as can be seen by passing it back, but is a good estimation
 
-        clipped_requested_group = np.clip(request,0,np.inf) # Although it discards negative influences, we need to clip the request to calculate usual completeness
 
-        # Now, we need to determine how complete that group usually is, HOW MUCH THE REQUEST IS USUALLY FULFILLED
+        # Now, we need to determine how complete that group usually is, how much the request is usually fulfilled
         # The idea being that having 1 peak in the group when there is usually only 2 on average is not 
         # the same as having one where there is usually at least 5.
-
         occupancy = []
         negative_occupancy = []
 
-        mask = clipped_requested_group/np.max(clipped_requested_group) #*16 # so we have full-term-equivalents, full term meaning "the most requested source"
-        # TODO I removed the dividing by max, try again with it if there are problems
-
+        mask = request/np.max(request) # So we have full-term-equivalents, full term meaning "the most requested source"
 
         for before in list_of_many_crms:
-            before_2d = np.max(before, axis = 0) # CRITICAL TO USE MAX TO GET LOCAL GROUPS !? risk is to "superimpose" local CRMs by flattening across. But we can take that risk in an estimation.
+            before_2d = np.max(before, axis = 0) # Use max to get local groups. Risk is to "superimpose" local CRMs by flattening across but we can take that risk in an estimation.
             
-            
-            # Only compute occupancy if the peak (the source) being considered is present (!!) so we see the correlators of the source itself
-            # Explain in Bayesian terms
+            # Only compute occupancy if the peak (the source) being considered is
+            # present (!) so we see the correlators of the source itself. Sort of Bayesian.
             if before_2d[curr_dataset_id, curr_tf_id] != 0:
                 
                 occupancy += [np.sum(mask*before_2d*intra_weight_mask)]
-                # TODO perhaps I should apply the first weight here ? Or since I apply it for nobody it compensates itself ? Better argument is that I compare the whole group here, not the individuals
 
-                # TODO add here computation of negative occupancy for step 3, again in Bayesian to indeed get their combis and not all combis
-                # I could try it with others_mask but I think 
+                # Computation of negative occupancy for step 3
                 negative_occupancy += [np.sum(others_mask*before_2d*intra_weight_mask)]
-
 
             else: 
                 occupancy += [0]
                 negative_occupancy += [0]
 
-                
-
+        # Maximum occupancy possible is when all peak are present
+        # NOTE Due to negative weights mean/max occupancy can be higher than 1
         max_occupancy_possible = np.sum(mask*full_crm_2d*intra_weight_mask)    
         occupancy = np.array(occupancy)
-        mean_occupancy = np.mean(occupancy[occupancy.nonzero()]) # Remove all zeroes occupancy (bayesian whatever)
+        mean_occupancy = np.mean(occupancy[occupancy.nonzero()]) # Remove all zeroes occupancy
        
-
         max_negative_occupancy_possible = np.sum(others_mask*full_crm_2d*intra_weight_mask) 
         negative_occupancy = np.array(negative_occupancy)
         mean_negative_occupancy = np.mean(negative_occupancy[negative_occupancy.nonzero()]) 
         
-        # NOTE : Due to negative weights mean/max occupancy can be higher than 1 !!?? SAY SO IN METHODS PAPER
 
         # The final second weight is, 1/usual proportinal occupancy
         inter_weight = max_occupancy_possible/mean_occupancy
 
 
-
-
-
         # ----- Overlapping groups
 
-        # Overlapping groups can result in a higher score by combining several influences
-        # Such groups are not always seen when looking at phantoms for individual source
+        # Overlapping groups can result in a higher score by combining several influences.
+        # Such groups are not always seen when looking at phantoms for individual source.
 
-        # An estimate is such : 
-        # We retake before_other that contains more or less all peaks that are
-        # not in the current correlation group
-
+        # An estimate is as such: we retake before_other that contains more or 
+        # less all peaks that are not in the current correlation group
         full_crm_3d_others = np.stack([before_others]*int(crm_length/squish_factor), axis=0).astype('float64')
-        #if use_crumbing: full_crm_3d = utils.add_crumbing(full_crm_3d) # DONT READD CRUMBING FOR THIS PART !! IT'S ALREADY ADDED
         predictionf_others = model.predict(full_crm_3d_others[np.newaxis,...,np.newaxis])[0,:,:,:,0]
         prediction_2df_others = np.mean(predictionf_others, axis=0) # 2D - mean along region axis
         
@@ -512,48 +452,21 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         # So calculate how much in a average scenario, they are expected to provide
         strangers_weight = mean_negative_occupancy / max_negative_occupancy_possible
         overlapping_weight = 1 - ((others_contibution/value_in_real_full) * strangers_weight)
-
-
-        # TODO This is an ersatz, we need to use Monte Carlo similar to occupancy estimation in te inter-group bias phase : apply intra and inter group corrections, and then look at phantoms. Probably.
-
-        # NOTE General assumption FOR ALL OF THIS MOVE ELSEWHER AND ADD TO PAPER : Assuming negative effects are negligible and that in biology more is always better
-
+        # TODO Replace with Monte Carlo similar to occupancy estimation 
 
         # Finally, combine the weights
         k = intra_weight * inter_weight * overlapping_weight
 
-
-
         # To prevent overamplification of not-learned sources (seen as noise), cap k at 10
         k = min(k,10)
 
- 
-
-        # WIP recording only if it is a real combi, not for crumbing
+        # Recording only if it is a real combi, not for crumbing
         if average_crm_2d[curr_dataset_id, curr_tf_id]>0:
             coefs_norm[combi] = k # Record it
-
-        
-
-
-        # Only write it in the tsv if it is a real source (normalization applied to crumbs does not count)
-        # TODO Since averaging over all_before takes time, move this condition directly to the calculation itself
-        if average_crm_2d[curr_dataset_id, curr_tf_id]>0:
             
             line=str(combi[0])+'\t'+str(combi[1])+'\t'+str(intra_weight)+'\t'+str(inter_weight)+'\t'+str(overlapping_weight)+'\t'+str(k)+'\n'
-            # Maybe add prediction_this and occupancy ?
+            # TODO Maybe add prediction_this and occupancy ?
             logcombifile.write(line)
-
-
-    # So in the end we have a dictionary of combinations.
-    # Normalize by the lowest k as otherwise we give 1000 to the "typical" behavior.
-    # Let's say we want to give 750 to typical behavior NOTE IN PAPER IMPORTANT FOR INTERPRETATION
-    # We want some margin for improvement : lowest k should bso insteaf of highest k, divide by 75 percent of lowest k
-    #maxval = 1/0.75 * coefs_norm[min(coefs_norm, key=coefs_norm.get)]
-    #coefs_norm_final = {k: v/maxval for k,v in coefs_norm.items()}
-    # To prevent overamplification of not-learned sources (seen as noise), cap k at 10
-
-
 
     logcombifile.close()
 
@@ -834,7 +747,6 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
-
 ################################################################################
 # --------------------------- Diagnostic plots ------------------------------- #
 ################################################################################
@@ -1043,7 +955,7 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
 
     # Stick all these scores in a dataframe !
     return df, separated_peaks
-    # TODO : REMOVE THE RETURN OF separated_peaks IT IS ONLY HERE FOR DEBUG PURPOSES
+    # TODO Remove te return of separated_peaks, it is only here for debug 
 
 
 
@@ -1058,16 +970,17 @@ def get_some_crms(train_generator, nb_of_batches_to_generate = 20, try_remove_cr
 
     This function returns all generated CRMs as a list.
 
-    NOTE : if asked, it also tentatively removes curmbs through rounding
+    NOTE : if asked, it also tentatively removes curmbs through rounding.
+    This should be done by default, as the normalization relies on it !
     """
 
     batches = [next(train_generator)[0] for i in range(nb_of_batches_to_generate)]
     many_crms = np.concatenate(batches, axis=0)
 
-    # TODO instead of calling test_generator, call it with get_matrix(crm_id) once that works
+    # TODO instead of calling the generator, call it with get_matrix(crm_id) once that works
 
     if try_remove_crumbs:
-        # Remove crumbs by rounding. Crumbs should never be at 1 unless massive evidnce, so mat-0.5 should never be rounded at 1
+        # Remove crumbs by rounding. Crumbs should never be at 1 unless massive evidence, so mat-0.5 should never be rounded at 1
         # For cases where we were not crumbed, since peaks are usually at 1, we use mat-0.45 instead, so 1-0.45=0.55 is still rounded to 1
         # TODO As for anomaly, this will break when we have non-binary peak values !!
         list_of_many_crms = [np.clip(np.around(X-0.45), 0,1)[:,:,:,0] for X in many_crms]
@@ -1181,8 +1094,7 @@ def plot_score_per_crm_density(peaks_file_path, crm_file_path):
     plots += [p]
     p = ggplot(res, aes(x='nb_peaks_fact', y='max_score')) + xlab("Number of peaks (log2)") + geom_boxplot(width=0.1)
     plots += [p]
-    # TODO NOTE removed the geom_violin from the last plot due to an inexplicable bandwith bug
-
+    # NOTE I removed the geom_violin from the last plot due to an inexplicable bandwith bug
 
     return plots
 

@@ -103,7 +103,7 @@ train_generator = produce_data_generator(parameters, all_matrices, get_matrix)
 # Prepare the model
 model = prepare.prepare_model_with_parameters(parameters,
     nb_datasets_model = len(datasets_clean), nb_tfs_model = len(cl_tfs),
-     root_path = root_path) # Print model parameters
+    root_path = root_path) # Print model parameters
 
 
 print("-- Dimensions : "+str(parameters["pad_to"])+ 'bp x '+str(len(datasets_clean))+' datasets x '+str(len(cl_tfs))+' TFs.')

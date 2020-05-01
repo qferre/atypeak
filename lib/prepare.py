@@ -44,6 +44,8 @@ def get_indexes(parameters, crmid, datasets, cl_tfs):
         datasets_clean = ["dat_"+str(i) for i in range(parameters['artificial_nb_datasets'])]
         cl_tfs = ["tf_"+str(i) for i in range(parameters['artificial_nb_tfs'])]
 
+        all_matrices = [None]
+
     else:
         # Collect all CRM numbers (each one is a *sample*)
         matrices_id = crmid.values()
@@ -55,7 +57,7 @@ def get_indexes(parameters, crmid, datasets, cl_tfs):
 
         print("Using real data for the '"+parameters["cell_line"]+"' cell line.")
 
-        return datasets_clean, cl_tfs, all_matrices
+    return datasets_clean, cl_tfs, all_matrices
 
 
 
@@ -172,5 +174,8 @@ def prepare_model_with_parameters(parameters, nb_datasets_model, nb_tfs_model, r
         with open(root_path+'/data/output/model/'+parameters['cell_line']+'_model_architecture.txt','w') as fh:
             model.summary(print_fn=lambda x: fh.write(x + '\n'))
 
+        from keras.utils.vis_utils import plot_model
+        plot_model(model, to_file = root_path+'/data/output/model/'+parameters['cell_line']+'_model_architecture.png',
+            show_shapes = True, show_layer_names = True)
 
     return model
