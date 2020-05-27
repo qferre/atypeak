@@ -523,7 +523,7 @@ if parameters['perform_model_diagnosis']:
     # Not done on our model, just on the source data. Used to check model results.
     # TODO Those are already calculated for the Q-score, merge code  
 
-    average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
+    average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig, jaccard_tf_fig = er.crm_diag_plots(list_of_many_crms, datasets_clean, cl_tfs)
     # NOTE Some "+" shape ghosts in the information plots (average CRM) can be due to summed crumbing.
 
     data_stats_output_path = plot_output_path + "data_stats/"
@@ -534,6 +534,7 @@ if parameters['perform_model_diagnosis']:
     dataset_corr_fig.savefig(data_stats_output_path+'dataset_correlation_matrix.pdf')
     tf_abundance_fig.savefig(data_stats_output_path+'tf_abundance_total_basepairs.pdf')
     dataset_abundance_fig.savefig(data_stats_output_path+'dataset_abundance_total_basepairs.pdf')
+    jaccard_tf_fig.savefig(data_stats_output_path+'tf_jaccard_index_matrix.pdf')
 
     plt.close('all') # Close all figures
 

@@ -1025,7 +1025,21 @@ def crm_diag_plots(list_of_many_crms, datasets, cl_tfs):
     plt.figure()
     dataset_abundance_fig = concat_by_dataset.sum().plot.bar(figsize = (10,6)).get_figure()
 
-    return (average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig)
+    # And the Jaccard index between TFs. This discards zeroes.  
+    jacc = pd.DataFrame(index=cl_tfs, columns=cl_tfs)
+
+    for first_tf in concat_by_tf:
+        for second_tf in concat_by_tf:
+            first_data = concat_by_tf[first_tf].values.astype(bool)
+            second_data = concat_by_tf[second_tf].values.astype(bool)
+            jacc.loc[first_tf, second_tf] = np.sum(first_data & second_data) / np.sum(first_data | second_data)
+
+    plt.figure(figsize=(14,12))
+    jaccard_tf_fig = sns.heatmap(jacc.values.astype(float), xticklabels=jacc.columns.values, yticklabels=jacc.columns.values,
+        cmap='Purples', annot=True, fmt = ".2f")
+
+
+    return (average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig, jaccard_tf_fig)
 
 
 
