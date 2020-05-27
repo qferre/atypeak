@@ -99,17 +99,19 @@ else:
         ## Output BED filepaths
 
         # Source directory
-        root_output_bed_path = root_path + '/data/output/bed/' + parameters['cell_line']
+        root_output_bed_path = root_path + '/data/output/bed/' + parameters['cell_line'] + '/'
         if not os.path.exists(root_output_bed_path): os.makedirs(root_output_bed_path)
 
         
-        output_bed_path = root_output_bed_path + ".bed"
-        output_bed_merged = root_output_bed_path + "_merged_doublons.bed"
+        output_bed_path = root_output_bed_path + parameters['cell_line'] + ".bed"
+        output_bed_merged = root_output_bed_path + parameters['cell_line'] + "_merged_doublons.bed"
 
-        output_bed_path_normalized_poub = root_output_bed_path + "_raw_normalized_by_tf_DEBUG.bed"  
+        output_bed_path_normalized_poub = root_output_bed_path + parameters['cell_line'] + "_raw_normalized_by_tf_DEBUG.bed"  
 
-        output_path_corr_group_normalized = root_output_bed_path + "_merged_doublons_normalized_corr_group.bed"
-        output_bed_path_final = root_output_bed_path + "_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
+        output_path_corr_group_normalized = root_output_bed_path + parameters['cell_line'] + "_merged_doublons_normalized_corr_group.bed"
+        output_bed_path_final = root_output_bed_path + parameters['cell_line'] + "_FINAL_merged_doublons_normalized_corr_group_normalized_by_tf.bed"
+
+
 
 
 
