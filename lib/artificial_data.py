@@ -181,9 +181,8 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
 
 
-    # In some cases you may not want noise (ie. for pre-training)
-
     ## NOISE STEP
+    # TODO In some cases you may not want noise (pre-training ?)
     if noise :
 
         # Drop some peaks from the stack at random
