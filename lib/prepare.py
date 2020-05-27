@@ -88,7 +88,8 @@ def configure_tensorflow_session(seed, disable_tensorflow_warnings = True):
     # NOTE May need to disable GPU for absolute reproducibility 
     # Not a problem since models are comparatively simple : the big bottleneck is
     # actually the file reading and matrix unsparsing IS IT THOUGH ?
-    #os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+    os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+    # TODO determine it once and for all
 
     if not USING_TENSORFLOW_2:
         tf.set_random_seed(seed)
