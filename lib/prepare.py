@@ -68,7 +68,7 @@ def configure_tensorflow_session(seed, disable_tensorflow_warnings = True):
     Was moved to allow subprocesses to create their own TF sessions.
     """
     # TODO Use this in multiprocessing result creation as well ? Should not be
-    # needed since I am just reloading a model
+    # needed since I am just reloading a model.
 
     # Disable INFO and WARNING messages
     if disable_tensorflow_warnings:
@@ -86,9 +86,9 @@ def configure_tensorflow_session(seed, disable_tensorflow_warnings = True):
     USING_TENSORFLOW_2 = (LooseVersion(tf.__version__) >= LooseVersion("2.0.0"))
 
     # NOTE May need to disable GPU for absolute reproducibility 
-    # Not a problem since models are comparatively simple : the big bottleneck is
-    # actually the file reading and matrix unsparsing IS IT THOUGH ?
-    #os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+    # Not a problem since models are comparatively simple : a big part of the
+    # bottleneck is actually the file reading and matrix unsparsing.
+    os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 
     if not USING_TENSORFLOW_2:
         tf.set_random_seed(seed)

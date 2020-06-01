@@ -1,5 +1,5 @@
 # System
-import os, sys, yaml, time, random
+import os, sys, yaml, time, random, copy
 from functools import partial
 
 # Data
@@ -57,12 +57,9 @@ get_matrix = partial(dr.extract_matrix,
 
 print('Parameters loaded.')
 
-
-"""
-# TODO To compute weights for the loss : based on the `crmtf_dict` object and 
+# NOTE To compute weights for the loss : based on the `crmtf_dict` object and 
 # also on the `datapermatrix` and `peaks_per_dataset` objects, we know the 
 # number of elements for each combination of TF/dataset.
-"""
 
 # Plot output path (different for artificial data)
 plot_output_path = prepare.get_plot_output_path(parameters)
@@ -73,7 +70,7 @@ plot_output_path = prepare.get_plot_output_path(parameters)
 # You may use either the artificial data generator or the true data.
 # Artificial data is mainly used for calibrations and demonstrations.
 
-def produce_data_generator(all_parameters_dict, matrices_id, get_matrix_func): # remake due to threading conflicts
+def produce_data_generator(parameters, matrices_id, get_matrix_func): # remake due to threading conflicts
     # Artificial data
     if parameters['use_artificial_data'] :
         generator = ad.generator_fake(region_length = parameters['pad_to'],
@@ -82,6 +79,8 @@ def produce_data_generator(all_parameters_dict, matrices_id, get_matrix_func): #
                                         watermark_prob = parameters['artificial_watermark_prob'],
                                         overlapping_groups = parameters['artificial_overlapping_groups'],
                                         tfgroup_split = parameters['artificial_tfgroup_split'],
+                                        this_many_groups_of_4_tfs = parameters["artificial_this_many_groups_of_4_tfs"],
+                                        split_tfs_into_this_many_groups = parameters["artificial_split_tfs_into_this_many_groups"],
                                         crumb = None)
     
     # Real data
@@ -124,7 +123,7 @@ for k, v in parameters.items(): print('\t',k,'=', v)
 # Also used in processing the file for multithreading !
 save_model_path = prepare.get_save_model_path(parameters, root_path)
 
-def train_model(model, parameters):
+def train_model(model, parameters, train_generator, save_model_path):
     """
     A wrapper function that will train a given model given the current parameters.
     Non-pure, since it depends on the rest of the code. Would be useful later for grid search.
@@ -159,12 +158,13 @@ def train_model(model, parameters):
         """
 
         print('Beginning training.')
-        print('This can be long, depending on your hardware, from several minutes to around an hour.')
+        print('This can be long, depending on your hardware, from minutes to hours.')
 
         start = time.time()
         model.fit_generator(train_generator, verbose=1,
             steps_per_epoch = parameters["nn_batches_per_epoch"],
             epochs = parameters["nn_number_of_epochs"],
+            #epochs = 6,
             callbacks = [es, es2],
             max_queue_size = 10) # Max queue size of 10 to prevent memory leak
         end = time.time()
@@ -198,7 +198,7 @@ def train_model(model, parameters):
     return model
 
 # Train the model
-model = train_model(model, parameters)
+model = train_model(model, parameters, train_generator, save_model_path)
 
 
 
@@ -206,6 +206,9 @@ model = train_model(model, parameters)
 ################################# DIAGNOSTIC ###################################
 ################################################################################
 
+# Figure size.
+eval_figsize_small = (5,5)
+eval_figsize_large = (8,5)
 
 # Get some samples (3D tensor representations of CRMs)
 # Produce a few batches (this is a parameter). I like to keep it around 2000*48
@@ -213,7 +216,7 @@ model = train_model(model, parameters)
 # abundance, normalization, etc.
 # NOTE To prevent an issue with threading, recreate a new train_generator
 print("Generating many CRMs for diagnosis. This may be long...")
-train_generator = produce_data_generator(all_parameters_dict=parameters, matrices_id=all_matrices, get_matrix_func=get_matrix)
+train_generator = produce_data_generator(parameters, all_matrices, get_matrix)
 
 start_genlist = time.time()
 list_of_many_crms = er.get_some_crms(train_generator,
@@ -222,9 +225,6 @@ stop_genlist = time.time()
 print('List of many CRMs for evaluation collated in '+str(stop_genlist-start_genlist)+' seconds.')
 
 
-# Figure size.
-eval_figsize_small = (5,5)
-eval_figsize_large = (8,5)
 
 
 
@@ -261,33 +261,34 @@ if parameters['perform_model_diagnosis']:
         for n in range(len(before_batch)):
 
             before_raw = np.copy(before_batch[n,:,:,:,0])
-
             before = np.around(before_raw-0.11) # Remove crumbing if applicable. TODO Make this more rigorous
+                         
             prediction = model.predict(before_raw[np.newaxis,...,np.newaxis])[0,:,:,:,0]
 
             # 2D - max along region axis
-            before_2d = np.max(before, axis=0)
+            before_2d = np.max(before_raw, axis=0)
             plt.figure(figsize=eval_figsize_small); before_2d_plot = sns.heatmap(np.transpose(before_2d), cmap = 'Blues', xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
             prediction_2d = np.max(prediction, axis=0)
+            
             plt.figure(figsize=eval_figsize_small); prediction_2d_plot = sns.heatmap(np.transpose(prediction_2d), annot = True, cmap = 'Greens', fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
+            plt.figure(figsize=eval_figsize_small); prediction_2d_plot_noannot = sns.heatmap(np.transpose(prediction_2d), annot = False, cmap = 'Greens', fmt='.2f', xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
 
             anomaly_matrix = er.anomaly(before, prediction)
             anomaly_plot = utils.plot_3d_matrix(anomaly_matrix, figsize=eval_figsize_large) # Normal in blue, anomalous in red
 
-
-
-
+            # Export plots
             before_2d_plot.tight_layout()
             before_2d_plot.savefig(example_output_path + "example_crm_before_2dmax_"+str(i)+".pdf")
             prediction_2d_plot.tight_layout()
-            prediction_2d_plot.savefig(example_output_path + "example_crm_rebuilt_2dmax_"+str(i)+".pdf")
-            
+            prediction_2d_plot.savefig(example_output_path + "example_crm_rebuilt_2dmax_"+str(i)+".pdf")  
+            prediction_2d_plot_noannot.tight_layout()
+            prediction_2d_plot_noannot.savefig(example_output_path + "example_crm_rebuilt_2dmax_no_annot_"+str(i)+".pdf")
+
             anomaly_plot.savefig(example_output_path + "example_crm_anomaly_"+str(i)+".pdf")
-            
+
             plt.close('all') # Close all figures
 
             i = i+1 # Increment counter
-
 
 
 
@@ -326,16 +327,18 @@ if parameters['perform_model_diagnosis']:
 
 
     # ------------------------------ Q-score evaluation --------------------------- #
-    # IMPORTANT For each {A,B} pair of sources (TR+dataset pairs, the model should give 
+    # For each {A,B} pair of sources (TR+dataset pairs), the model should give 
     # a different score to A alone than when B is present *only* when there is
     # actually a correlation. If not, if either learned too little (not identified)
     # the group) or too much (too precise). Conversely if there is no correlation
     # the presence of one should have no impact on the other.
+    # Same reasoning for the presence of phantoms for A when B is present, should
+    # be true only if they correlate.
 
     print("Beginning Q-score evaluation. Can be long...")
 
     qstart = time.time()
-    q, qscore_plot, corr_plot, posvar_x_res_plot = er.calculate_q_score(model,
+    q, qscore_plot, corr_plot, posvar_x_res_plot, negvar_x_res_plot = er.calculate_q_score(model,
         list_of_many_befores = list_of_many_crms,
         all_datasets_names = datasets_clean, all_tf_names = cl_tfs)
     qend = time.time()
@@ -357,6 +360,7 @@ if parameters['perform_model_diagnosis']:
     qscore_plot.savefig(qscore_output_path+'qscore_plot.pdf')
     corr_plot.savefig(qscore_output_path+'correlation_matrix_dims.pdf')
     posvar_x_res_plot.savefig(qscore_output_path+'posvar_when_both_present.pdf')
+    negvar_x_res_plot.savefig(qscore_output_path+'negvar_phantoms_when_present.pdf')
 
     np.savetxt(qscore_output_path+'q_score.tsv', q, delimiter='\t')
 
@@ -365,34 +369,7 @@ if parameters['perform_model_diagnosis']:
     plt.close('all') # Close all figures
     
     
-
-    """
-    ## WIP Grid search part
-
-    # Read the yaml parameters to get a default parameters dict
-
-    parameters_to_try = []
-    # Copy the original parameters and replace only the part we want
-    parameters_custom = copy(params)
-    parameters_custom[key] = new_value
-    parameters_to_try += [parameters_custom]
-
-    result_grid = pd.DataFrame()
-
-    # now do the search
-    for parameters_custom in parameters_to_try:
-        model = prepare_model_with_parameters(parameters_custom)
-        trained_model = train_model(model, parameters_custom)
-        q, _,_,_ = q_score(model, train_generator)
-
-        # Add resulting q-score to parameters
-        parameters_to_try.update({'Q_score':np.sum(np.sum(q))})
-
-        parameters_to_try = parameters
-
-        # And record the q_score
-        result_grid = result_grid.append(pd.Series(parameters_to_try), ignore_index = True)
-    """
+ 
 
 
 
@@ -541,3 +518,85 @@ if parameters['perform_model_diagnosis']:
 print("Model succesfully trained and diagnosed !")
 
 
+
+
+
+
+# ------------------------------- Grid search -------------------------------- #
+# The section below presents an example of code used to perform a grid search
+# over possible parameters.
+# The model is trained and then evaluated with the Q-score
+
+
+
+# NOTE For now, only done on artificial data
+if parameters['use_artificial_data']:
+
+    print("Beginning grid search... this may be very long.")
+
+
+    # Copy the original parameters, replace only the part we want, and add the 
+    # newly created parameters to the list of parameters to try in the grid seach
+    # Each element of the 'for' loop will create another set of parameters and 
+    # add it to the list of parameters to try. Obviously, other 'for' loops 
+    # could be nested inside.
+    parameters_to_try = []
+    for deepdim in [8, 32, 128, 256]:
+
+        # Copy the current parameters from the YAML
+        p = copy.deepcopy(parameters) 
+
+        # Apply modifications 
+        p["nn_deep_dim"] = deepdim
+
+        # Add to the list of parameters to try
+        parameters_to_try += [p]
+
+
+
+
+    # Prepare to stock the models, in the same order as the `parameters_to_try`
+    models_gridsearch = [None] * len(parameters_to_try) 
+    result_grid = pd.DataFrame() # Will contain results
+
+    # Now do the grid search
+    i = 0
+
+    for parameters_custom in parameters_to_try:
+        
+        # Prepare generator
+        datasets_clean, cl_tfs, all_matrices = prepare.get_indexes(parameters_custom, crmid, datasets, cl_tfs)
+        train_generator = produce_data_generator(parameters_custom, all_matrices, get_matrix) 
+        list_of_many_crms = er.get_some_crms(train_generator, parameters_custom['nb_batches_generator_for_diag_list_of_many_crms'])
+
+        # Prepare model
+        models_gridsearch[i] = prepare.prepare_model_with_parameters(parameters_custom, len(datasets_clean), len(cl_tfs))
+        models_gridsearch[i] = train_model(models_gridsearch[i], parameters_custom, train_generator, save_model_path)
+        i += 1
+
+        # Now calculate the Q-score
+        q, _,_,_,_ = er.calculate_q_score(models_gridsearch[i], list_of_many_crms, datasets_clean, cl_tfs)
+        plt.close('all') # Close all figures loaded in memory during q-score evaluation
+
+
+        # Add resulting q-score to parameters and then record it
+        parameters_custom.update({'q_score':np.sum(np.sum(q))})
+        result_grid = result_grid.append(pd.Series(parameters_custom), ignore_index = True)
+        
+
+    # Produce and save the figure
+
+    resdf = result_grid[['nn_deep_dim','q_score']]
+    resdf['q_score_display'] = np.around(resdf['q_score'].values, decimals = 3)
+
+    from plotnine import ggplot, aes, geom_bar, geom_text, scale_fill_brewer
+
+    grid_search_plot = (ggplot(resdf, aes(x='factor(nn_deep_dim)', y='q_score')) +
+        geom_bar(stat="identity", fill="steelblue") +
+        geom_text(aes(label='q_score_display'), vjust='top', nudge_y = -0.03)
+    )
+    
+    grid_search_plot.save(filename = plot_output_path+'artifical_data_grid_search_plot.png', height=10, width=14, units = 'in', dpi=400, verbose = False)
+    plt.close('all')
+
+    print("Grid search complete.")

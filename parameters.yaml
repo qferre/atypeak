@@ -17,17 +17,18 @@ load_saved_model: False
 process_full_real_data: True
 
 
-#### Diagnosis
-
-# If True, you will use only artificial data. Used to demonstrate that the model can learn correlation groups.
-use_artificial_data: True
+#### Diagnosis parameters
+# Most users will not need to modify this
 
 # If reloading a known model, you may want to set this to False and skip the diagnosis steps (Q-score, etc.)
 perform_model_diagnosis: True
 
-# The below will perform diagnosis on result data, after processing : average score per crm, alone+both plots, etc. You should likely leave it at True
+# The model will perform diagnosis on result data, after processing : average score per crm, alone+both plots, etc.
+# You should likely leave it at True.
 perform_processed_data_diagnosis: True
 
+# If True, use only artificial data instead to perform a proof-of-concept.
+use_artificial_data: True
 
 #### Others
 random_seed: 1234 # Used all across the program, including in training
@@ -39,20 +40,20 @@ disable_tensorflow_warnings: True
 # ------ Those are the key parameters for the information budget
 
 ## Architecture
-nn_kernel_nb: 24
-nn_deep_dim: 64
+nn_kernel_nb: 24 #24
+nn_deep_dim: 32 #512 # 16
 ## Training
-nn_optimizer_learning_rate: 0.001  # NOTE Default for Adam is 0.001 (!)
+nn_optimizer_learning_rate: 0.0001 #0.00001  # NOTE Default for Adam is 0.001 (!)
 
 
-# ------  You likely won't need to modify the parameters below
+# ------ You likely won't need to modify the parameters below
 
 # Weighting
 # Should be a list containing as many elements as the relevant dimension. Gives their respective weights (sorted alphabetically)
 # eg. tf_weights = [1,1,2,2]
 # if `null`, default weight of 1 is used.
 tf_weights: null
-datasets_weights: null
+datasets_weights: null #[10,10,10,10,1,1,1,1] #null
 
 pad_to: 3200 # WARNING Must be equal to the "pad_to" parameter in the Makefile !
 crumb: 0.1
@@ -71,6 +72,7 @@ nn_fit_verbosity: 1
 nn_early_stop_min_delta: 0.00025  # Loss delta below this are not considered improvements
 nn_early_stop_patience: 5
 nn_early_stop_loss_absolute: 0 # Will stop training once this threshold of loss is reached
+# NOTE early stopping before the loss has reached a plateau can be very useful !
 
 ## Other architecture parameters
 nn_kernel_width_in_basepairs: 20 # Should be kept small, use squishing instead
@@ -116,10 +118,17 @@ estimate_corr_group_for:
 example_nb_batches: 1
 
 ### Artificial data parameters
-artificial_tfgroup_split: 0.5
-artificial_overlapping_groups: True  # If True, the groups will be {AB,A} instead of {A,B}
 
 artificial_nb_datasets: 8
-artificial_nb_tfs: 8
+artificial_nb_tfs: 16
 artificial_ones_only: True
-artificial_watermark_prob: 0.75
+artificial_watermark_prob: 0 # Usually 0.75, lower for higher dimensions
+
+
+artificial_tfgroup_split: 0.5 # Odds of selecting first group instead of second group. 0.666 was used to demonstrate group rebuilt value depends on completeness, not abundance
+
+## Debug overrides
+artificial_overlapping_groups: False  # If True, the groups will be {AB,A} instead of {A,B}
+# NOTE The default values for the two parameters below are `null`, not 0 or None or False.
+artificial_this_many_groups_of_4_tfs: null # Split all TFs in this many groups of size 4 TFs (don't use the rest of the tfs, noise only) and chosse uniformly randomly among them. Override previous two parameters
+artificial_split_tfs_into_this_many_groups: 8 # Instead of 2 correlation groups, splints the artificiail_nb_tfs into this many groups, picking one uniromly randoly each time. Overrides the three previous parameters
