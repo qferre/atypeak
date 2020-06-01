@@ -21,9 +21,10 @@ By directory:
 
 - Similarily, `estimated_corr_groups` gives estimated correlation groups for sources defined in parameters (a source is a TF + dataset pair). Estimation is done by putting only a peak for this source.
 
-- `data_stats` contains information on the raw data (nor treated by the model):
+- `data_stats` contains information on the raw data (not treated by the model) calculated on the 3D tensor representations of the CRMs:
   - `average_crm` is a 2d average (across X axis) of many CRMs (that number is *nb of diagnostic batches \* batch size*),
-  - Correlation coefficients (R) calculated on 3D tensors between dimensions,
+  - Correlation coefficients (R) between dimensions,
+  - Jaccard index between TFs,
   - Abundance (number of nucleotides) for peaks in each dimension.
 
 - `distribution_score` contains, for both raw data (produced by the model) and data after final normalization:

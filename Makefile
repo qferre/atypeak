@@ -51,7 +51,7 @@ run_all:
 	for p in parameters/* ;	do
 		cp $$p parameters.yaml 
 
-		echo "# ------- $${p} IN PROGRESS ------- #"
+		echo "############>>------ $${p} IN PROGRESS ------<<############"
 		make run	
 		
 		rm parameters.yaml

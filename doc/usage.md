@@ -10,6 +10,7 @@
 
 **Remarks** : The code supports TensorFlow 2, but uses 1.15 by default for reproducibility and performance reasons on legacy code. Furthermore, due to dependencies, only Linux and MacOS systems are supported.
 
+
 ## Running
 
 - Set the parameters in *parameters.yaml*. Their meaning is detailed in YAML comments.
@@ -26,6 +27,13 @@
 
 It is also possible to run the training and processing steps separately by running `make train` followed by `make process`.
 
+
+### Grid search
+
+At the end of `train.py`, there is an example of code showing how to perform a grid search for parameter choice on our model, which can be adapted and reused.
+
+You can use this, for example in a Jupyter kernel, to systematically test parameters for your data.
+
 ### Running for multiple parameters
 
 *atyPeak* will always look for its parameters at the root of the directory in the `parameters.yaml` file. However, you can use `make run_all` to run the **full** analysis for all individual parameter files in the `parameters` directory. This is done by copying them at the root, running the model, then deleting them.
@@ -33,6 +41,7 @@ It is also possible to run the training and processing steps separately by runni
 Outputs are named according to the cell line, so results for different cell lines are not overwritten.
 
 Default parameters are set to artificial data, while the parameters for the real data analysis are in the aforementioned `parameters` directory.
+
 
 ## Data format
 
@@ -60,3 +69,10 @@ chr1	10135	10285	GSE42390.tal1.erythroid	12.67102	.	10261
 ```
 
 The first three fields are standard BED (chromosome, start, end). The fourth field (name) however **must** obey this formatting: **dataset_id.transcription_factor_name.cell_line_name**. The other fields are ignored (in our example, strand and peak center).
+
+
+## Artificial data
+
+It is possible to use artificial data instead of real data. This is mostly useful for demonstrations of principle.
+
+In broad strokes, the artificial data is made by picking one of several possible predefined correlation groups of sources (TR+dataset pairs) once per artificial region, and then placing a stack of peaks from the sources of this group only.
