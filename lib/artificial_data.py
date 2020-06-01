@@ -17,7 +17,9 @@ The goal is to show that the model will usually rebuilt the correlation group as
 
 def generator_fake(batch_size = 10, region_length = 160, #reliable_datasets=np.arange(16),
                     nb_datasets = 16, nb_tfs = 10, squish_factor = 10, ones_only = False,
-                    watermark_prob = 0.75, tfgroup_split = 2/3, overlapping_groups = False, crumb = None):
+                    watermark_prob = 0.75, tfgroup_split = 2/3, overlapping_groups = False, 
+                    this_many_groups_of_4_tfs = None,
+                    split_tfs_into_this_many_groups = None, crumb = None):
     """
     Generator object that calls the make_a_fake_matrix() function.
 
@@ -35,7 +37,9 @@ def generator_fake(batch_size = 10, region_length = 160, #reliable_datasets=np.a
         for i in range(batch_size):
             X = make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
                 ones_only=ones_only, watermark_prob=watermark_prob,
-                tfgroup_split=tfgroup_split, overlapping_groups=overlapping_groups)
+                tfgroup_split=tfgroup_split, overlapping_groups=overlapping_groups,
+                this_many_groups_of_4_tfs=this_many_groups_of_4_tfs,
+                split_tfs_into_this_many_groups=split_tfs_into_this_many_groups)
 
             if crumb != None :
                 # To counter sparsity, add crumbs if requested
@@ -97,7 +101,9 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
                         reliable_datasets = None, signal = True, noise = True,
                         ones_only = False, watermark_prob = 1,
                         tfgroup_split = 2/3, overlapping_groups = False,
-                        return_separately = False):
+                        return_separately = False,
+                        this_many_groups_of_4_tfs = None,
+                        split_tfs_into_this_many_groups = None):
     """
     region_length,nb_datasets,nb_tfs : matrix size
     reliable_datasets : which datasets are reliable
@@ -106,6 +112,8 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
 
     tfgroup_split : odds of using one tf group or the other
     overlapping_groups: whether the groups should be {A, B} or {A, AB}
+    this_many_groups_of_4_tfs: insteaf oa making 2 groups of TFs, will make this many groups of 4 TFs. Override previous two.
+    split_tfs_into_this_many_groups : instead of making 2 groups of TFs, will make this many groups. Overrives previous three
 
     return_separately : if True, will stop and return a separate list of lists of peaks (resp. stack, noise, watermark)
     To be processed in evaluation - this will NOT return a tensor.
@@ -142,7 +150,17 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
         tf_second_half = range(int(nb_tfs/2),nb_tfs)
 
 
-        # Overlapping groups : If desired, pick not from first half OR second half
+
+
+  
+
+
+
+
+
+
+
+        # Alternative 2 : If desired, pick not from first half OR second half
         # but instead pick from first+second OR First only
         if overlapping_groups:
             tf_first_half = range(nb_tfs)
@@ -159,6 +177,32 @@ def make_a_fake_matrix(region_length, nb_datasets, nb_tfs,
         if cointoss : tfs_to_choose_from = tf_first_half
         else : tfs_to_choose_from = tf_second_half
 
+
+
+
+        # Override 1 : instead of splitting in 2, we can split in groups of 4 Tfs
+        # and keep how many we want.
+        if this_many_groups_of_4_tfs != None:
+            tfs = list(range(nb_tfs))
+            tf_groups = [tfs[i:i+4] for i in range(0, len(tfs), 4)]
+
+            # Now pick uniformly randomly one group among them, using only the first N ones as ordered
+            tfs_to_choose_from = random.choice(tf_groups[0:this_many_groups_of_4_tfs])
+        
+
+
+        # Override 2 : split the tfs into N groups and pick uniformly randomly 
+        # one group among them. It overrides the previous overrides.
+        if split_tfs_into_this_many_groups != None:
+            tfs = list(range(nb_tfs))
+            tf_groups = np.array_split(tfs, split_tfs_into_this_many_groups)
+            tfs_to_choose_from = random.choice(tf_groups)
+
+
+
+
+
+        ### WRITING PEAKS 
 
         # Pick number of peaks to write
         N = ss.poisson(1).rvs() + 1

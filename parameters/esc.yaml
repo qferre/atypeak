@@ -60,3 +60,5 @@ artificial_nb_datasets: 8
 artificial_nb_tfs: 8
 artificial_ones_only: True
 artificial_watermark_prob: 0.75
+artificial_this_many_groups_of_4_tfs: null
+artificial_split_tfs_into_this_many_groups: null

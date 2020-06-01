@@ -44,7 +44,7 @@ nb_workers_produce_file: 4
 # ---------------------------- Diagnostic ------------------------------------ #
 tf_normalization_center_around: 750
 
-nb_batches_generator_for_diag_list_of_many_crms: 200
+nb_batches_generator_for_diag_list_of_many_crms: 100
 
 tf_pairs:
   - ["ctcf","rad21"]
@@ -64,3 +64,5 @@ artificial_nb_datasets: 8
 artificial_nb_tfs: 8
 artificial_ones_only: True
 artificial_watermark_prob: 0.75
+artificial_this_many_groups_of_4_tfs: null
+artificial_split_tfs_into_this_many_groups: null
