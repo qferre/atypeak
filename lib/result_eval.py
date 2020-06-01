@@ -33,7 +33,7 @@ Careful not to import Keras or Tensorflow here, otherwise the subprocess in file
 ################################################################################
 
 
-def anomaly(before, prediction):
+def anomaly(before, prediction, mask = True):
     """
     Anomaly score between a true (`before`) and predicted (`prediction`) CRMs.
     Both argument should be 3d NumPy arrays.
@@ -45,8 +45,8 @@ def anomaly(before, prediction):
     # TODO Return the un-crumbed matrix for use as a mask ? Not needed if I don't visualize it, since I query the values based on the original peaks coordinates
     # Here is a temporary hotfix that removes all values below 0.1
     # It will stop working when we have values besides real peak values below 0.1 (or higher than 1) !!
-    mask = np.clip(np.around(before, decimals = 1),0,1)
-    mask[ mask !=0 ] = 1 # This is 0 where there is no peak, and 1 where there is one
+    m_mask = np.clip(np.around(before, decimals = 1),0,1)
+    m_mask[ m_mask !=0 ] = 1 # This is 0 where there is no peak, and 1 where there is one
 
     ## Anomaly score computation
     anomaly = 1 - ((before+1E-100) - prediction)/(before+1E-100)
@@ -56,7 +56,15 @@ def anomaly(before, prediction):
 
     anomaly = np.clip(anomaly, 1E-5, np.inf) # Do not clip at 0 or it will not be plotted
 
-    return anomaly * mask
+    # Should we apply a mask corresponding to the original peaks ? Yes in most cases, but
+    # some functions may want the "anomaly" of empty regions to look for phantoms. It doesn't hurt to
+    # give the option.
+    # To prevent division by zero, in that case, we assume there was a peak everywhere with a score of 1
+    # After simplifying, this simply means we return the prediction.
+    if mask:
+        return anomaly * m_mask   # Most cases
+    if not mask:
+        return prediction
 
 
 
@@ -524,7 +532,6 @@ def estimate_corr_group_for_combi(dataset_name, tf_name,
 
 
 
-
 ################################################################################
 # -------------------------------- Q-score ----------------------------------- #
 ################################################################################
@@ -549,7 +556,8 @@ def calculate_q_score(model, list_of_many_befores,
 
     # Predict and compute anomalies using the model
     list_of_many_predictions = [model.predict(X[np.newaxis, ..., np.newaxis]) for X in list_of_many_befores]
-    list_of_many_anomaly_matrices = [anomaly(before, predict[0,:,:,:,0]) for before, predict in zip(list_of_many_befores, list_of_many_predictions)]
+    list_of_many_anomaly_matrices = [anomaly(before, predict[0,:,:,:,0], mask = False) for before, predict in zip(list_of_many_befores, list_of_many_predictions)]
+    # NOTE we get the FULL tensors of anomaly to be able to see phantoms (mask = False)
 
     # TODO I recompute those in crm_diag_plots(), maybe functionalize it ?
     summed_by_tf = [np.sum(X, axis=1) for X in list_of_many_befores]
@@ -565,13 +573,15 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
-    def q_score_for_pair_from_groupdf(group, AB_corr_coef):
+    def scores_for_pair_from_groupdf(group, AB_corr_coef):
         # The Q-score should take as input dataframes like the ones I usuallly 
         # create for the alone+both plots. (the 'group' variable) and the estimated corr coef for AB
         # So each line is this : [dimension (A or B), value, status (both or alone)]
-        # Calculate if the means are different for A alone and A with B
-
+        
         # NOTE This is directional, we see if the score of A changes, not B (B will be done later by calling this function with the group reversed)
+
+        ## First test : "alone" vs "both"
+        # Calculate if the means are different for A alone and A with B
 
         # Select A alone values and A both
         scores_alone = group.loc[(group['status'] == 'alone') & (group['dim'] == 'A')]['score']
@@ -581,13 +591,22 @@ def calculate_q_score(model, list_of_many_befores,
         mean_A_both = np.mean(scores_both)
 
         # Is there a significant difference ? Do a student t-test
-        mean_diff = scipy.stats.ttest_ind(scores_alone, scores_both, equal_var=False)#.pvalue
-        is_significant = mean_diff.pvalue < 0.05
+        mean_diff_alone_both = scipy.stats.ttest_ind(scores_alone, scores_both, equal_var=False)
+        mean_diff_alone_both_pvalue = mean_diff_alone_both.pvalue
 
-        # Now the formula for the q-score
-        qscore = (AB_corr_coef - is_significant)**2
+        ## Second test : "phantom" vs "none"
+        # Does B add phantoms for A ?
+        scores_phantom = group.loc[(group['status'] == 'phantom') & (group['dim'] == 'A')]['score']
+        scores_none    = group.loc[(group['status'] == 'none') & (group['dim'] == 'A')]['score']
+ 
+        mean_A_phantom = np.mean(scores_phantom)
+        mean_A_none = np.mean(scores_none)
 
-        return qscore, mean_A_alone, mean_A_both, mean_diff.pvalue
+        mean_diff_phantom_none = scipy.stats.ttest_ind(scores_phantom, scores_none, equal_var=False)
+        mean_diff_phantom_none_pvalue = mean_diff_phantom_none.pvalue
+
+
+        return mean_A_alone, mean_A_both, mean_diff_alone_both_pvalue, mean_A_phantom, mean_A_none, mean_diff_phantom_none_pvalue
 
 
 
@@ -607,28 +626,34 @@ def calculate_q_score(model, list_of_many_befores,
             sliceB = np.take(m, dim_tuple_B[0], axis=dim_tuple_B[1])
             is_B_present = (np.sum(sliceB) != 0)
 
+
             # Record status
-            if (is_A_present and is_B_present) : status = 'both'
-            elif (is_A_present or is_B_present) : status = 'alone'
-            else : status = 'none'
+            if (is_A_present and is_B_present) : status = 'both'            # Both A and B were present in the CRM
+            elif (is_A_present and (not is_B_present)) : status = 'alone'   # A was present in the CRM, B was not
+            elif ((not is_A_present) and is_B_present) : status = 'phantom' # A was not originally present, so what we are looking at are phantoms
+            else : status = 'none'                                          # Phantoms of A from all other cases
 
 
-            # Only proceed if there is at least one of the pair, A or B
-            if status != 'none':
+            ### Now record each nonzero value in the dimensions in anomalies
+            # For simplicity, we average along the entire X axis, but do that on
+            # the nonzeros of course. In the true diagnostic figures on real CRM
+            # we don't do that and correctly consider each peak's value.
+            anomaly_xsummed = np.array(np.ma.masked_equal(ma, 0).mean(axis=0))
 
-                ### Now record each nonzero value in the dimensions in anomalies
-                # For simplicity, we average along the entire X axis, but do that on
-                # the nonzeros of course. In the true diagnostic figures on real CRM
-                # we don't do that and correctly consider each peak's value.
-                anomaly_xsummed = np.array(np.ma.masked_equal(ma, 0).mean(axis=0))
+            # Reduce axis by 1 since we summed along the region_size axis
+            sliceA_anomaly = np.take(anomaly_xsummed, dim_tuple_A[0], axis=dim_tuple_A[1]-1)
+            sliceB_anomaly = np.take(anomaly_xsummed, dim_tuple_B[0], axis=dim_tuple_B[1]-1)
 
-                # Reduce axis by 1 since we summed along the region_size axis
-                sliceA_anomaly = np.take(anomaly_xsummed, dim_tuple_A[0], axis=dim_tuple_A[1]-1)
-                sliceB_anomaly = np.take(anomaly_xsummed, dim_tuple_B[0], axis=dim_tuple_B[1]-1)
+            # Remember we have two axes : datasets and TFs. What we have done is take
+            # all values where one of the two axes has a fixed value.
 
-                # Record all nonzero values for each
-                for v in sliceA_anomaly[sliceA_anomaly.nonzero()]: group += [('A',v, status)]
-                for v in sliceB_anomaly[sliceB_anomaly.nonzero()]: group += [('B',v, status)]
+            # Record all nonzero values for each
+            # Take the corresponding positions in the anomaly matrix
+            for v in sliceA_anomaly[sliceA_anomaly.nonzero()]: group += [('A',v, status)]
+            for v in sliceB_anomaly[sliceB_anomaly.nonzero()]: group += [('B',v, status)]
+
+
+
 
         # Return the result df
         groupres =  pd.DataFrame(group, columns = ['dim','score','status'])
@@ -648,6 +673,9 @@ def calculate_q_score(model, list_of_many_befores,
     # Get all pairwise ordered combinations
     all_duos = list(itertools.permutations(dim_tuples, 2))
 
+
+    # TODO Try to multiprocess this !
+
     for dim_tuple_A, dim_tuple_B in all_duos:
 
 
@@ -662,27 +690,52 @@ def calculate_q_score(model, list_of_many_befores,
         AB_corr_coef = corr.iloc[locA, locB]
 
         #print('corr = '+str(AB_corr_coef))
-        qscore, mean_A_alone, mean_A_both, mean_diff_pvalue = q_score_for_pair_from_groupdf(group, AB_corr_coef)
-
+        mean_A_alone, mean_A_both, mean_diff_alone_both_pvalue, mean_A_phantom, mean_A_none, mean_diff_phantom_none_pvalue = scores_for_pair_from_groupdf(group, AB_corr_coef)
+        
         # Make it more diagnostically explicit, with a giant dataframe giving the qscore but also the correlation
-        all_qscores += [(dim_tuple_A, dim_tuple_B, AB_corr_coef, qscore, mean_A_alone, mean_A_both, mean_diff_pvalue)]
+        all_qscores += [(dim_tuple_A, dim_tuple_B, AB_corr_coef, mean_A_alone, mean_A_both, mean_diff_alone_both_pvalue, mean_A_phantom, mean_A_none, mean_diff_phantom_none_pvalue)]
 
-    all_qscores_df = pd.DataFrame(all_qscores, columns = ['dimA','dimB','corr','qscore', 'mean_A_alone', 'mean_A_both', 'mean_diff_pvalue'])
+    all_qscores_df = pd.DataFrame(all_qscores, columns = ['dimA','dimB','corr', 'mean_A_alone', 'mean_A_both', 'mean_diff_alone_both_pvalue', 'mean_A_phantom', 'mean_A_none', 'mean_diff_phantom_none_pvalue'])
 
 
     # Sum all original 'before' matrices along the X axis to get the mean_frequencies
     mean_freq = np.mean(list_of_many_befores, axis = (0,1))
     # Useful in q-score weight calculation
 
+
+
     # Finally make it into a matrix and see the contributions
     tnb = dt_nb + tf_nb
-    res = np.zeros((tnb,tnb))
+
+
+
+    respos = np.zeros((tnb,tnb))
+    resneg = np.zeros((tnb,tnb))
+
     posvar = np.zeros((tnb,tnb))
+    negvar = np.zeros((tnb,tnb))
+
     q_weights = np.zeros((tnb,tnb))
+
+
+
 
     for _, row in all_qscores_df.iterrows():
 
         dim_tuple_A = row['dimA'] ; dim_tuple_B = row['dimB']
+
+
+        """
+        print("-------")
+        print("A=",dim_tuple_A)
+        print("B=",dim_tuple_B)
+        print("mean_A_alone =", row["mean_A_alone"])
+        print("mean_A_both =", row["mean_A_both"])
+        print("mean_A_phantom =", row["mean_A_phantom"])
+        print("mean_A_none =", row["mean_A_none"])
+        """
+
+
 
         # Datasets first then tf
         dim1_raw = dim_tuple_A[0] + d_offset*(dim_tuple_A[1]-1)
@@ -690,20 +743,20 @@ def calculate_q_score(model, list_of_many_befores,
 
 
         # In a sort-of-Bonferroni correction, we fix the p-value threshold at 5% divided by the number of dimensions
-        val = row['mean_diff_pvalue'] < (0.05 / tnb)
+        respos[dim1_raw, dim2_raw] = row['mean_diff_alone_both_pvalue'] < (0.05 / tnb)
+
+        resneg[dim1_raw, dim2_raw] = row['mean_diff_phantom_none_pvalue'] < (0.05 / tnb)
+
+ 
+ 
 
 
-        # We consider only variation in the same direction as the correlation coefficient.
-        # ie. when corr coeff is positive (almost all cases) we discard negative variations that
-        # are due to there being no correlation but sometimes noise. However if negative correlation we should keep cases where alone > both
-
-        both_higher_than_alone = row['mean_A_alone'] < row['mean_A_both']
-
-        res[dim1_raw, dim2_raw] = val
-
-        current_corr = corr.iloc[dim1_raw, dim2_raw]
-        current_corr_is_pos = np.sign(current_corr) > 0
-        posvar[dim1_raw, dim2_raw] = int(both_higher_than_alone == current_corr_is_pos)
+        # To simplify, only consider positive correlations. It appears negative
+        # relations are unreliable and likely due to either "balancing" as I 
+        # have observed negative weights in artificial for the watermark for 
+        # example, or to being no correlation but sometimes noise.
+        posvar[dim1_raw, dim2_raw] = int(row['mean_A_alone'] < row['mean_A_both'])
+        negvar[dim1_raw, dim2_raw] = int(row['mean_A_none'] < row['mean_A_phantom'])
 
 
         # Take the weights for A and B and sum them and multiply that to the S-score
@@ -717,7 +770,10 @@ def calculate_q_score(model, list_of_many_befores,
         # We would like the diagonal of weights to stay full zeros. We don't care about A vs A.
         np.fill_diagonal(q_weights, 0)
 
-    plt.figure(); posvar_x_res_plot = sns.heatmap(posvar * res, xticklabels=q_labels, yticklabels=q_labels).get_figure()
+
+    plt.figure(); posvar_x_res_plot = sns.heatmap(posvar * respos, xticklabels=q_labels, yticklabels=q_labels).get_figure()
+    plt.figure(); negvar_x_res_plot = sns.heatmap(negvar * resneg, xticklabels=q_labels, yticklabels=q_labels).get_figure()
+   
 
     # To simplify, we binarize by marking as "correlating" pairs with a correlation coefficient above the average
     mean_corr = np.mean(np.mean(corr))
@@ -726,11 +782,32 @@ def calculate_q_score(model, list_of_many_befores,
     # But plot the true correlation instead
     plt.figure(); corr_plot = sns.heatmap(corr, xticklabels=q_labels, yticklabels=q_labels).get_figure()
 
+
+
     ## Finally calculate the q-score
     # Goal is to quantify whether there is a difference between the observed 
     # "correlation" in posvar*res and the theoretical ones in c ?
     # Then multiply by the weights
-    q_raw = ((posvar*res)-c)**2
+    q_raw_pos = ((posvar*respos)-c)**2
+
+    # Two terms : pos and neg, for 'too precise' and 'not precise enough'
+    q_raw_neg = ((negvar*resneg)-c)**2
+
+    # For now, just sum the two terms.
+    q_raw = q_raw_pos + q_raw_neg
+
+
+
+
+    # IMPORTANT NOTE Q-score between dimensions of different nature are computed
+    # (datasets with TRs and vice-versa) but should be used directly as those dimensions
+    # they are not mutually exclusive or comparable so correlations between them are
+    # somewhat artificial. TODO Formalize this
+    # So fow now they are ignored. To remove them, remember that the cutoff between datasets and tfs is at `dt_nb`
+    q_raw[0:dt_nb, dt_nb:(dt_nb+tf_nb)] = 0
+    q_raw[tf_nb:(dt_nb+tf_nb), 0:dt_nb] = 0
+
+
     q = q_raw * q_weights
     plt.figure(); qscore_plot = sns.heatmap(q, cmap = 'Reds', xticklabels=q_labels, yticklabels=q_labels).get_figure()
 
@@ -740,8 +817,8 @@ def calculate_q_score(model, list_of_many_befores,
     corr_plot.tight_layout()
     posvar_x_res_plot.tight_layout()
 
-    return (q, qscore_plot, corr_plot, posvar_x_res_plot)
 
+    return (q, qscore_plot, corr_plot, posvar_x_res_plot, negvar_x_res_plot)
 
 
 
@@ -955,7 +1032,7 @@ def proof_artificial(trained_artificial_model, partial_make_a_fake_matrix,
 
     # Stick all these scores in a dataframe !
     return df, separated_peaks
-    # TODO Remove te return of separated_peaks, it is only here for debug 
+    # TODO Remove the return of separated_peaks, it is only here for debug 
 
 
 
