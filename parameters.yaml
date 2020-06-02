@@ -40,10 +40,10 @@ disable_tensorflow_warnings: True
 # ------ Those are the key parameters for the information budget
 
 ## Architecture
-nn_kernel_nb: 24 #24
-nn_deep_dim: 32 #512 # 16
+nn_kernel_nb: 24
+nn_deep_dim: 32
 ## Training
-nn_optimizer_learning_rate: 0.0001 #0.00001  # NOTE Default for Adam is 0.001 (!)
+nn_optimizer_learning_rate: 0.0001 # NOTE Default for Adam is 0.001 (!)
 
 
 # ------ You likely won't need to modify the parameters below
@@ -53,7 +53,7 @@ nn_optimizer_learning_rate: 0.0001 #0.00001  # NOTE Default for Adam is 0.001 (!
 # eg. tf_weights = [1,1,2,2]
 # if `null`, default weight of 1 is used.
 tf_weights: null
-datasets_weights: null #[10,10,10,10,1,1,1,1] #null
+datasets_weights: null
 
 pad_to: 3200 # WARNING Must be equal to the "pad_to" parameter in the Makefile !
 crumb: 0.1
