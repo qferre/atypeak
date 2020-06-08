@@ -27,6 +27,8 @@
 
 It is also possible to run the training and processing steps separately by running `make train` followed by `make process`.
 
+*Remark*: Multithreading and GPUs are disable for training for reproducibility reasons. This should not have much consequence since tensor creation (CPU-boud) is the biggest bottleneck.
+
 
 ### Grid search
 

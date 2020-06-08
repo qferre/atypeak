@@ -39,7 +39,7 @@ By directory:
   - `correlation_matrix_dims` gives the correlation of each dimension with each other (for example, is the presence of peaks from TF 2 correlated with peaks from TF 5 ? Only datsets with datasets and TFs with TFs). This is a reference and done on input data.
   - `posvar_when_both_present`: does the presence of a peak from the Y dimension increase model score of the X dimension ? 1 if yes. If the model is properly calibrated, correlations should have an impact on the score and this should look like the correlation matrix above.
   - `negvar_phantoms_when_present`: conversely, does the presence of a peak from the Y dimension result in increased phantoms for the X dimension ?
-  - `Q-score` is the individual contributions of each pair to the Q-score (with numerical values as a tsv, which is roughly the difference between the correlation and posvar+negvar plots.
+  - `Q-score` is the individual contributions of each pair to the Q-score (with numerical values as a tsv), which is roughly the difference between the correlation and posvar+negvar plots. Lower is better.
 
 
 - `normalization_factors` give the correlation-group normalization factors (before the final by-TF normalization).
