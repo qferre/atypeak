@@ -375,8 +375,21 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict_
             dataset = line[3][0]; tf = line[3][1]
             score = float(line[4])
 
-            # Apply scaling factor
-            new_score = score * scaling_factor_dict[(dataset, tf)]
+            # Retrive and apply scaling factor
+
+            try:
+                scaling_factor_current = scaling_factor_dict[(dataset, tf)]
+            except:
+                # If this source (TF + dataset pair) has no value, it is likely
+                # because it was too rare and was not seen in the abundance matrix
+                # which is calculated usually over 10K CRM. In that case, default
+                # to the mean coefficient
+                scaling_factor_current = np.mean([float(v) for v in scaling_factor_dict.values()])
+
+                print("No scaling computed for", dataset, tf, " as it was too rare in the sampled data. Defaulting to mean, but you should likely ignore them.")
+            
+
+            new_score = score * scaling_factor_current
 
             # Round as integer
             new_score = int(np.around(new_score))
