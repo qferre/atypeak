@@ -795,6 +795,8 @@ def calculate_q_score(model, list_of_many_befores,
         # example, or to being no correlation but sometimes noise.
         posvar[dim1_raw, dim2_raw] = int(row['mean_A_alone'] < row['mean_A_both'])
         negvar[dim1_raw, dim2_raw] = int(row['mean_A_none'] < row['mean_A_phantom'])
+        # Problems can also arise if we consider negative correlations as significant
+        # but the coefficient is only, say -0.02. Amplitude of the correlation should play a role.
 
 
         # Take the weights for A and B and sum them and multiply that to the S-score

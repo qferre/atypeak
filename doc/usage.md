@@ -27,7 +27,9 @@
 
 It is also possible to run the training and processing steps separately by running `make train` followed by `make process`.
 
-Processing times for model training and diagnosis as well as BED file generation scale with the number of dimensions (nb. datasets x nb. TF). Processing the source BED files is a large part of this time, so the model training is not CPU-bound. Reasonable queries (around 15x15) should take less than an hour for diagnosis and training, but larger queries can take several hours. Producing the bed file itself can be long (roughly 1 second for 10 CRMs with small queries like HeLa, 1 second for 3 CRMs for K562, totalling hours). Check that the rebuilt matrices in `make train` before proceeding with `make process`.
+Processing times for model training and diagnosis as well as BED file generation scale with the number of dimensions (nb. datasets x nb. TF). Processing the source BED files is a large part of this time, so the model training is not CPU-bound. As such multithreading and GPUs are disabled in training for reproducibility reasons
+
+Reasonable queries (around 15x15) should take less than an hour for diagnosis and training, but larger queries can take several hours. Producing the bed file itself can be long (roughly 1 second for 10 CRMs with small queries like HeLa, 1 second for 3 CRMs for K562, totalling hours). Check that the rebuilt matrices in `make train` before proceeding with `make process`.
 
 
 ### Grid search
