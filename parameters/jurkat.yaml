@@ -39,7 +39,7 @@ nn_kernel_width_in_basepairs: 20
 nn_reg_coef_filter: 0.0025
 nn_pooling_factor: 2
 
-nb_workers_produce_file: 4 
+nb_workers_produce_file: 6 
 
 # ---------------------------- Diagnostic ------------------------------------ #
 tf_normalization_center_around: 750
@@ -55,6 +55,7 @@ estimate_corr_group_for:
   - ["None", "None"]
 
 example_nb_batches: 1
+urexample_steps: 50
 
 artificial_tfgroup_split: 0.666
 artificial_overlapping_groups: False 
