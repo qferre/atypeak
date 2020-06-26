@@ -224,19 +224,22 @@ list_of_many_crms = er.get_some_crms(train_generator,
 stop_genlist = time.time()
 print('List of many CRMs for evaluation collated in '+str(stop_genlist-start_genlist)+' seconds.')
 
-
+# TODO The RAM footprint of list_of_many_crms can be massive for larger cell lines. We currently
+# cast to boolean to save RAM because we round off, but later replace it with a generator.
 
 
 
 ## ----- Normalization
 # Estimate the scaling factors to normalize by corr group
 # See source code for details. In summary, all groups learned by the models are not of the same size, might have abundance biases, and may overlap
+start_norm = time.time()
 corr_group_scaling_factor_dict = er.estimate_corr_group_normalization_factors(model = model,
     all_datasets = datasets_clean, all_tfs = cl_tfs, list_of_many_crms = list_of_many_crms,
     crm_length = parameters['pad_to'], squish_factor = parameters["squish_factor"],
     outfilepath = './data/output/diagnostic/'+parameters['cell_line']+'/'+"normalization_factors.tsv")
+stop_norm = time.time()
 # Needed in true file production, hence it's not optional.
-print("Correlation group normalization factors estimated.")
+print("Correlation group normalization factors estimated in "+str(stop_norm-start_norm)+" seconds.")
 
 
 # Perform some diagnosis on the model. Only if the `perform_model_diagnosis` 
@@ -395,40 +398,51 @@ if parameters['perform_model_diagnosis']:
         tfp.get_figure().savefig(kernel_output_path + "conv_kernel_tf_x0_"+str(filter_nb)+".pdf")
         plt.close('all') # Close all figures
 
+
+
+
+
+    
     # --------------------- Visualize encoded representation ----------------- #
     # I added some Y and Z blur, to smooth it a little. Keep the blur minimal, makes no sense otherwise. 
 
-    ENCODED_LAYER_NUMBER = 15
-    # To check this is the correct number
-    if not (model.layers[ENCODED_LAYER_NUMBER].name == 'encoded'):
-        print("ENCODED_LAYER_NUMBER in the code not set to the encoded dimension. Urexamples will be on a different dimension.")
+    # Verify if it was disabled
+    if parameters['urexample_steps'] != 0 :
 
-    print("Computing ur-examples. Can be long...")
-    urexamples = cp.compute_max_activating_example_across_layer(model, random_state = 42,
-                                selected_layer = ENCODED_LAYER_NUMBER, output_of_layer_select_this_dim = 2,
-                                learning_rate = 1, nb_steps_gradient_ascent = 50,
-                                blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5,
-                                debug_print = False)
+        ENCODED_LAYER_NUMBER = 15
+        # To check this is the correct number
+        if not (model.layers[ENCODED_LAYER_NUMBER].name == 'encoded'):
+            print("ENCODED_LAYER_NUMBER in the code not set to the encoded dimension. Urexamples will be on a different dimension.")
+
+        print("Computing ur-examples. Can be long...")
+        start_ur = time.time()
+        urexamples = cp.compute_max_activating_example_across_layer(model, random_state = 42,
+                                    selected_layer = ENCODED_LAYER_NUMBER, output_of_layer_select_this_dim = 2,
+                                    learning_rate = 1, nb_steps_gradient_ascent = parameters['urexample_steps'], # Should be around 50 steps by default
+                                    blurStdX = 0.2, blurStdY = 1E-2,  blurStdZ = 1E-2, blurEvery = 5,
+                                    debug_print = False)
+        stop_ur = time.time()
+        print("Ur-examples computed in "+str(stop_ur-start_ur)+" seconds.")
+        
+        urexample_output_path = plot_output_path + "urexamples_encoded_dim/"
+        if not os.path.exists(urexample_output_path): os.makedirs(urexample_output_path)
+
+        for exid in range(len(urexamples)):
+            ex = urexamples[exid]
+            ex = ex[...,0]
+            x = np.mean(ex, axis = 0)
+            plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0, xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
+            urfig.tight_layout()
+            urfig.savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
+            plt.close('all') # Close all figures
     
-    urexample_output_path = plot_output_path + "urexamples_encoded_dim/"
-    if not os.path.exists(urexample_output_path): os.makedirs(urexample_output_path)
-
-    for exid in range(len(urexamples)):
-        ex = urexamples[exid]
-        ex = ex[...,0]
-        x = np.mean(ex, axis = 0)
-        plt.figure(figsize=eval_figsize_small); urfig = sns.heatmap(np.transpose(x), cmap ='RdBu_r', center = 0, xticklabels = datasets_clean, yticklabels = cl_tfs).get_figure()
-        urfig.tight_layout()
-        urfig.savefig(urexample_output_path + "urexample_dim_"+str(exid)+".pdf")
-        plt.close('all') # Close all figures
-
-    """
-    # Get an encoded representation for comparison (from the latest `before`, from above)
-    tmp = cp.get_encoded_representation(before[np.newaxis,...,np.newaxis], model)
-    tmpd = np.transpose(tmp[0]**2)
-    plt.figure(figsize=eval_figsize_large); sns.heatmap(tmpd)
-    utils.plot_3d_matrix(before)
-    """
+        """
+        # Get an encoded representation for comparison (from the latest `before`, from above)
+        tmp = cp.get_encoded_representation(before[np.newaxis,...,np.newaxis], model)
+        tmpd = np.transpose(tmp[0]**2)
+        plt.figure(figsize=eval_figsize_large); sns.heatmap(tmpd)
+        utils.plot_3d_matrix(before)
+        """
 
 
 
@@ -456,8 +470,7 @@ if parameters['perform_model_diagnosis']:
                 
             plt.close('all') # Close all figures    
         except:
-            print("Error estimating for : "+str(combi))
-            print("Ignoring.")
+            print("Error estimating for : "+str(combi)+", ignoring.")
 
 
 
