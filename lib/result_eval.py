@@ -42,6 +42,14 @@ def anomaly(before, prediction, mask = True):
     NOTE: this is all designed to work with peak scores, but for now the peaks all have scores of "1" which simply means present.
     """
 
+
+
+    # Force casting to float64 to be safe for future operations
+    before = before.astype('float64')
+    prediction = prediction.astype('float64')
+
+
+
     # TODO Return the un-crumbed matrix for use as a mask ? Not needed if I don't visualize it, since I query the values based on the original peaks coordinates
     # Here is a temporary hotfix that removes all values below 0.1
     # It will stop working when we have values besides real peak values below 0.1 (or higher than 1) !!
@@ -558,9 +566,13 @@ def calculate_q_score(model, list_of_many_befores,
 
 
     # Predict and compute anomalies using the model
-    list_of_many_predictions = [model.predict(X[np.newaxis, ..., np.newaxis]) for X in list_of_many_befores]
-    list_of_many_anomaly_matrices = [anomaly(before, predict[0,:,:,:,0], mask = False) for before, predict in zip(list_of_many_befores, list_of_many_predictions)]
+    list_of_many_predictions = (model.predict(X[np.newaxis, ..., np.newaxis]) for X in list_of_many_befores)
+    list_of_many_anomaly_matrices = (anomaly(before, predict[0,:,:,:,0], mask = False) for before, predict in zip(list_of_many_befores, list_of_many_predictions))
     # NOTE we get the FULL tensors of anomaly to be able to see phantoms (mask = False)
+    # I use genrator comprehensions to save RAM here instead of list comprehensions
+
+
+
 
     # TODO I recompute those in crm_diag_plots(), maybe functionalize it ?
     summed_by_tf = [np.sum(X, axis=1) for X in list_of_many_befores]
@@ -671,13 +683,34 @@ def calculate_q_score(model, list_of_many_befores,
     dt_nb = len(concat_by_dataset.columns)
     tf_nb = len(concat_by_tf.columns)
 
-    dim_tuples = [(i, 1) for i in range(dt_nb)] + [(j, 2) for j in range(tf_nb)]
+
+    dim_datasets = [(i, 1) for i in range(dt_nb)]
+    dim_tfs = [(j, 2) for j in range(tf_nb)]
+    #dim_tuples = dim_datasets + dim_tfs
 
     # Get all pairwise ordered combinations
-    all_duos = list(itertools.permutations(dim_tuples, 2))
+    #all_duos = list(itertools.permutations(dim_tuples, 2))
 
 
-    # TODO Try to multiprocess this !
+
+    # IMPORTANT NOTE Q-score between dimensions of different nature are computed
+    # (datasets with TRs and vice-versa) but should be used directly as those dimensions
+    # they are not mutually exclusive or comparable so correlations between them are
+    # somewhat artificial. TODO Formalize this
+
+    # NOTE More generally problems can arise when a dimension A is only present as noise in cases where B is present, resulting in artificially significant negative impact since, when noise, A has a lower score.
+
+ 
+
+    
+    # So we use this instead
+    datasets_duos = list(itertools.permutations(dim_datasets, 2))
+    tf_duos = list(itertools.permutations(dim_tfs, 2))
+    all_duos = datasets_duos + tf_duos
+
+
+    # TODO Try to multiprocess this loop !
+    # TODO INDEED !!
 
     for dim_tuple_A, dim_tuple_B in all_duos:
 
@@ -700,6 +733,8 @@ def calculate_q_score(model, list_of_many_befores,
 
     all_qscores_df = pd.DataFrame(all_qscores, columns = ['dimA','dimB','corr', 'mean_A_alone', 'mean_A_both', 'mean_diff_alone_both_pvalue', 'mean_A_phantom', 'mean_A_none', 'mean_diff_phantom_none_pvalue'])
 
+
+    # NOTE Mean values in alone, both, phantom, none seem low.  TODO Query only where they SHOULD have been, not the entire X axis ? 
 
     # Sum all original 'before' matrices along the X axis to get the mean_frequencies
     mean_freq = np.mean(list_of_many_befores, axis = (0,1))
@@ -802,13 +837,6 @@ def calculate_q_score(model, list_of_many_befores,
 
 
 
-    # IMPORTANT NOTE Q-score between dimensions of different nature are computed
-    # (datasets with TRs and vice-versa) but should be used directly as those dimensions
-    # they are not mutually exclusive or comparable so correlations between them are
-    # somewhat artificial. TODO Formalize this
-    # So fow now they are ignored. To remove them, remember that the cutoff between datasets and tfs is at `dt_nb`
-    q_raw[0:dt_nb, dt_nb:(dt_nb+tf_nb)] = 0
-    q_raw[tf_nb:(dt_nb+tf_nb), 0:dt_nb] = 0
 
 
     q = q_raw * q_weights
@@ -1054,16 +1082,27 @@ def get_some_crms(train_generator, nb_of_batches_to_generate = 20, try_remove_cr
     This should be done by default, as the normalization relies on it !
     """
 
-    batches = [next(train_generator)[0] for i in range(nb_of_batches_to_generate)]
-    many_crms = np.concatenate(batches, axis=0)
-
+    
     # TODO instead of calling the generator, call it with get_matrix(crm_id) once that works
 
-    if try_remove_crumbs:
-        # Remove crumbs by rounding. Crumbs should never be at 1 unless massive evidence, so mat-0.5 should never be rounded at 1
-        # For cases where we were not crumbed, since peaks are usually at 1, we use mat-0.45 instead, so 1-0.45=0.55 is still rounded to 1
-        # TODO As for anomaly, this will break when we have non-binary peak values !!
-        list_of_many_crms = [np.clip(np.around(X-0.45), 0,1)[:,:,:,0] for X in many_crms]
+    list_of_many_crms = [] # We will concatenate the batches to get a "mega-batch" of all the CRMs
+    # For each batch to generate...
+    for _ in range(nb_of_batches_to_generate):
+
+        # Get it
+        to_add = next(train_generator)[0]
+
+        # Remove crumbs
+        if try_remove_crumbs:
+            # Remove crumbs by rounding. Crumbs should never be at 1 unless massive evidence, so mat-0.5 should never be rounded at 1
+            # For cases where we were not crumbed, since peaks are usually at 1, we use mat-0.45 instead, so 1-0.45=0.55 is still rounded to 1
+            # TODO As for anomaly, this will break when we have non-binary peak values !!
+            # We also cast is as boolean since we have rounded, this will diminish RAM cost 
+            to_add = [np.clip(np.around(X-0.45), 0,1)[:,:,:,0].astype('bool') for X in to_add]
+           
+        list_of_many_crms += to_add
+
+        del to_add
 
     return list_of_many_crms
 
