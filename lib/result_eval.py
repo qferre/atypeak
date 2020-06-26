@@ -221,7 +221,7 @@ def produce_result_file(all_matrices, output_path, #model,
 
     if nb_processes >= 2:
         
-        print("Multi threaded")
+        print("Multi threaded, with", nb_processes,"threads")
 
         mana = multiprocessing.Manager()
         result_queue = mana.Queue()
@@ -461,6 +461,9 @@ def estimate_corr_group_normalization_factors(model, all_datasets, all_tfs,
         strangers_weight = mean_negative_occupancy / max_negative_occupancy_possible
         overlapping_weight = 1 - ((others_contibution/value_in_real_full) * strangers_weight)
         # TODO Replace with Monte Carlo similar to occupancy estimation 
+
+
+        # ------ Final steps
 
         # Finally, combine the weights
         k = intra_weight * inter_weight * overlapping_weight
@@ -1113,7 +1116,7 @@ def crm_diag_plots(list_of_many_crms, datasets, cl_tfs):
 
     plt.figure(figsize=(14,12))
     jaccard_tf_fig = sns.heatmap(jacc.values.astype(float), xticklabels=jacc.columns.values, yticklabels=jacc.columns.values,
-        cmap='Purples', annot=True, fmt = ".2f")
+        cmap='Purples', annot=True, fmt = ".2f").get_figure()
 
 
     return (average_crm_fig, tf_corr_fig, tf_abundance_fig, dataset_corr_fig, dataset_abundance_fig, jaccard_tf_fig)

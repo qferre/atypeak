@@ -90,9 +90,7 @@ else:
         raise ValueError("Error : process_full_real_data was set to True, but use_artificial_data is also True; `process_full_real_data` cannot be used with artificial data.")
     else:
         print("Writing result BED file for peaks, with anomaly score.")
-        print("This can be long (roughly 1 second for 10 CRMs with reasonably-sized queries, like 15 datasets x 15 TFs).")
-        print("On big queries (like 25*50) it can be 1 second per CRM.")
-
+        print("This can be long, from 0.1 second per CRM for smaller queries (size ~15x15) to 1 second (size ~25x50). Multithreading will help for smaller queries but cost RAM.")
 
         
 

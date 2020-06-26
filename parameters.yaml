@@ -82,7 +82,7 @@ nn_pooling_factor: 2
 
 # How many workers to use when multithreading file production. At least 1.
 nb_workers_produce_file: 4 
-# NOTE Higher number of processes is not always faster, and will increase RAM footprint which can be problematic for very large models/dimensions
+# NOTE Higher number of processes is not always faster. For larger queries (above 20 TFs x 20 datasets disk access usually becomes the bottleneck.)
 
 # ---------------------------- Diagnostic ------------------------------------ #
 
@@ -94,7 +94,7 @@ tf_normalization_center_around: 750
 # Several diagnostic steps are done only on a randomized subset of CRMs ; the subset is generated one.
 # This parameter betermines how many batches are drawn to geenrate the subset
 nb_batches_generator_for_diag_list_of_many_crms: 200
-# This is criticial, because it can take a very long time for high-dimensional data
+# Careful as it can take a very long time for high-dimensional data, and consume large amounts of RAM for storage if the matrices are large or contain floats.
 
 
 ## Distribution of scores depending on TF presence.
@@ -116,6 +116,10 @@ estimate_corr_group_for:
 
 # Get some examples of CRMs' representations and rebuilding by the models. Number of batches to be given as example.
 example_nb_batches: 1
+
+# Number of steps of gradient ascent when computing ur examples (CRM that would most activate) for each neuron of the encoded dimension. 
+# Can be very long when the encoded dimension (== deep dimension) is larger than 50. Set to 0 to disable.
+urexample_steps: 50
 
 ### Artificial data parameters
 
