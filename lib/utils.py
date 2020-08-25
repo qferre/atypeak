@@ -356,7 +356,7 @@ def normalize_result_file_with_coefs_dict(result_file_path, scaling_factor_dict_
     if outfilepath is None : outfilepath = result_file_path + "_normalized_corr_group.bed" # Default file path
     normalized_rf = open(outfilepath,'w')
     # Header
-    normalized_rf.write('track name ='+cl_name+'_corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by correlation group" useScore=1'+'\n')
+    normalized_rf.write('track name='+cl_name+'_corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by correlation group" useScore=1'+'\n')
 
 
     # Reload normalization dict from tsv
@@ -473,9 +473,9 @@ def normalize_result_file_score_by_tf(result_file_path, cl_name, outfilepath = N
     normalized_rf = open(outfilepath,'w')
     # Header
     if not was_corr_group_normalized_before_header:
-        normalized_rf.write('track name ='+cl_name+'_tf-normalized description="'+cl_name+' peaks with anomaly score - normalized by TF" useScore=1'+'\n')
+        normalized_rf.write('track name='+cl_name+'_tf-normalized description="'+cl_name+' peaks with anomaly score - normalized by TF" useScore=1'+'\n')
     else:
-        normalized_rf.write('track name ='+cl_name+'_tf-and-corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by corr group and then by TF" useScore=1'+'\n')
+        normalized_rf.write('track name='+cl_name+'_tf-and-corr-group-normalized description="'+cl_name+' peaks with anomaly score - normalized by corr group and then by TF" useScore=1'+'\n')
         
     ## Re-open original result file 
     rf = open(result_file_path,'r')

@@ -182,7 +182,7 @@ def produce_result_file(all_matrices, output_path, #model,
 
     # Open result file in append mode
     rf = open(output_path,'w')
-    if add_track_header : rf.write('track name ='+parameters['cell_line']+' description="'+parameters['cell_line']+' peaks with anomaly score" useScore=1'+'\n')
+    if add_track_header : rf.write('track name='+parameters['cell_line']+' description="'+parameters['cell_line']+' peaks with anomaly score" useScore=1'+'\n')
 
 
     ## Main loop iterating over all matrices
