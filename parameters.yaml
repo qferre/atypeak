@@ -41,7 +41,7 @@ disable_tensorflow_warnings: True
 
 ## Architecture
 nn_kernel_nb: 24
-nn_deep_dim: 32
+nn_deep_dim: 32 #64
 ## Training
 nn_optimizer_learning_rate: 0.0001 # NOTE Default for Adam is 0.001 (!)
 
@@ -51,9 +51,9 @@ nn_optimizer_learning_rate: 0.0001 # NOTE Default for Adam is 0.001 (!)
 # Weighting
 # Should be a list containing as many elements as the relevant dimension. Gives their respective weights (sorted alphabetically)
 # eg. tf_weights = [1,1,2,2]
-# if `null`, default weight of 1 is used.
+# The default parameter is `null`, meaning a default weight of 1 is used for all.
 tf_weights: null
-datasets_weights: null
+datasets_weights: null #[10,10,10,10,1,1,1,1]
 
 pad_to: 3200 # WARNING Must be equal to the "pad_to" parameter in the Makefile !
 crumb: 0.1
@@ -82,7 +82,7 @@ nn_pooling_factor: 2
 
 # How many workers to use when multithreading file production. At least 1.
 nb_workers_produce_file: 4 
-# NOTE Higher number of processes is not always faster. For larger queries (above 20 TFs x 20 datasets disk access usually becomes the bottleneck.)
+# NOTE Higher number of processes is not always faster, and will increase RAM footprint. For larger queries (above roughly 20 TFs x 20 datasets), disk access usually becomes the bottleneck instead.
 
 # ---------------------------- Diagnostic ------------------------------------ #
 
@@ -94,7 +94,7 @@ tf_normalization_center_around: 750
 # Several diagnostic steps are done only on a randomized subset of CRMs ; the subset is generated one.
 # This parameter betermines how many batches are drawn to geenrate the subset
 nb_batches_generator_for_diag_list_of_many_crms: 200
-# Careful as it can take a very long time for high-dimensional data, and consume large amounts of RAM for storage if the matrices are large or contain floats.
+# Careful not to set this too high. It can take a very long time for high-dimensional data, and consume large amounts of RAM for storage if the matrices are large or contain floats.
 
 
 ## Distribution of scores depending on TF presence.
@@ -124,15 +124,16 @@ urexample_steps: 50
 ### Artificial data parameters
 
 artificial_nb_datasets: 8
-artificial_nb_tfs: 16
+artificial_nb_tfs: 16 #8
 artificial_ones_only: True
 artificial_watermark_prob: 0 # Usually 0.75, lower for higher dimensions
+
 
 
 artificial_tfgroup_split: 0.5 # Odds of selecting first group instead of second group. 0.666 was used to demonstrate group rebuilt value depends on completeness, not abundance
 
 ## Debug overrides
 artificial_overlapping_groups: False  # If True, the groups will be {AB,A} instead of {A,B}
-# NOTE The default values for the two parameters below are `null`, not 0 or None or False.
-artificial_this_many_groups_of_4_tfs: null # Split all TFs in this many groups of size 4 TFs (don't use the rest of the tfs, noise only) and chosse uniformly randomly among them. Override previous two parameters
-artificial_split_tfs_into_this_many_groups: 8 # Instead of 2 correlation groups, splints the artificiail_nb_tfs into this many groups, picking one uniromly randoly each time. Overrides the three previous parameters
+# NOTE The default values for the two parameters below are `null`, not 0 nor None nor False.
+artificial_this_many_groups_of_4_tfs: null # Split all TFs in this many groups of size 4 TFs (don't use the rest of the tfs, noise only) and chosse uniformly randomly among them. Overrides the previous two parameters.
+artificial_split_tfs_into_this_many_groups: null # Instead of 2 correlation groups, splins the artificil_nb_tfs into this many groups, picking one uniformly randomly each time. Overrides the three previous parameters.
