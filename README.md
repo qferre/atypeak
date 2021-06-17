@@ -6,7 +6,13 @@ We present a stacked multiview, shallow convolutional autoencoder to do this. CR
 
 Please see *atyPeak, Ferré et al. [TBD]* for more information.
 
-The code is written in Keras. Our result data can be regenerated here, and is also available here : *remap/link_TBD*
+The code is written in Keras. Our result data can be regenerated here, and is also available here: 
+
+- https://github.com/qferre/atypeak-files/
+- Mirrored at http://remap2020.univ-amu.fr/download_page 
+
+ChIP-seq can be obscured by data anomalies and biases. *atyPeak* is a deep-learning based method to identify ChIP-seq peaks that have “atypical profiles”, meaning that those peaks are found without their usual collaborators. "Collaborators" are defined as the other Transcriptional Regulators (or corroborating datasets) which are usually found in the same neighborhood, in the Cis Regulatory Elements of this cell line. Peaks get a higher score when more of their usual collaborators are present.
+
 
 ## Usage
 
@@ -24,6 +30,8 @@ Here is a summary of the usage steps:
 ## Output significance
 
 Once the analysis is run, output can be found in `data/output`. See `doc/output_significance.md` for more details.
+
+Generally, anomaly score thresholds and interpretation are at the user’s discretion. Anomalies usually represent noisy peaks. However, a focused study of a single experimental series may rely on low-scoring peaks as they might be caused by certain events of interest. Regions with a high density of high-scoring peaks are the strongest candidate CREs.
 
 ## Contributing
 
